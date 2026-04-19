@@ -41,3 +41,32 @@ pub trait ArmableSchedule: Schedule {
     /// missed opportunity.
     fn withdraw_and_rearm(&mut self, now: f64);
 }
+
+// -----------------------------------------------------------------------
+// Blanket impls for boxed trait objects.
+//
+// These let `Box<dyn Schedule>` and `Box<dyn ArmableSchedule>` satisfy
+// generic bounds like `S: Schedule` / `S: ArmableSchedule`. Without them
+// a caller who type-erases a schedule (e.g. in the Python bindings) is
+// unable to re-instantiate `LimitedHold<S>` over the erased value.
+// -----------------------------------------------------------------------
+
+impl<T: Schedule + ?Sized> Schedule for Box<T> {
+    fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome> {
+        (**self).step(now, event)
+    }
+
+    fn reset(&mut self) {
+        (**self).reset()
+    }
+}
+
+impl<T: ArmableSchedule + ?Sized> ArmableSchedule for Box<T> {
+    fn arm_time(&self) -> f64 {
+        (**self).arm_time()
+    }
+
+    fn withdraw_and_rearm(&mut self, now: f64) {
+        (**self).withdraw_and_rearm(now)
+    }
+}
