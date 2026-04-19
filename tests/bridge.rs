@@ -618,7 +618,7 @@ fn interlocking_builds() {
 // ---- Unsupported ---------------------------------------------------------
 
 #[test]
-fn trial_based_errors() {
+fn trial_based_missing_params_errors() {
     let node = ScheduleExpr::TrialBased(TrialBased {
         trial_type: "MTS".into(),
         params: BTreeMap::new(),
@@ -627,12 +627,173 @@ fn trial_based_errors() {
 }
 
 #[test]
-fn aversive_schedule_errors() {
+fn trial_based_unknown_type_errors() {
+    use contingency_dsl::ast::TrialParam;
+    let mut params = BTreeMap::new();
+    params.insert("comparisons".to_string(), TrialParam::Int(2));
+    let node = ScheduleExpr::TrialBased(TrialBased {
+        trial_type: "Unknown".into(),
+        params,
+    });
+    assert!(from_dsl_expr(&node, 1.0).is_err());
+}
+
+#[test]
+fn aversive_schedule_missing_params_errors() {
     let node = ScheduleExpr::AversiveSchedule(AversiveSchedule {
         kind: AversiveKind::Sidman,
         params: BTreeMap::new(),
     });
     assert!(from_dsl_expr(&node, 1.0).is_err());
+}
+
+#[test]
+fn bridge_trial_based_mts_builds() {
+    use contingency_dsl::ast::TrialParam;
+    let mut params = BTreeMap::new();
+    params.insert("comparisons".to_string(), TrialParam::Int(3));
+    params.insert("ITI".to_string(), TrialParam::Float(1.0));
+    params.insert("ITI_unit".to_string(), TrialParam::Str("s".into()));
+    params.insert(
+        "limitedHold".to_string(),
+        TrialParam::Float(5.0),
+    );
+    params.insert(
+        "limitedHoldUnit".to_string(),
+        TrialParam::Str("s".into()),
+    );
+    params.insert(
+        "consequence".to_string(),
+        TrialParam::Schedule(Box::new(ScheduleExpr::Special(Special {
+            kind: SpecialKind::Crf,
+        }))),
+    );
+    let node = ScheduleExpr::TrialBased(TrialBased {
+        trial_type: "MTS".into(),
+        params,
+    });
+    let mut s = from_dsl_expr(&node, 1.0).unwrap();
+    // One tick to anchor; schedule will pick a correct operandum.
+    let out = s.step(0.0, None).unwrap();
+    assert!(!out.reinforced);
+}
+
+#[test]
+fn bridge_trial_based_gonogo_builds() {
+    use contingency_dsl::ast::TrialParam;
+    let mut params = BTreeMap::new();
+    params.insert("responseWindow".to_string(), TrialParam::Float(2.0));
+    params.insert(
+        "responseWindowUnit".to_string(),
+        TrialParam::Str("s".into()),
+    );
+    params.insert("ITI".to_string(), TrialParam::Float(1.0));
+    params.insert("ITI_unit".to_string(), TrialParam::Str("s".into()));
+    params.insert(
+        "consequence".to_string(),
+        TrialParam::Schedule(Box::new(ScheduleExpr::Special(Special {
+            kind: SpecialKind::Crf,
+        }))),
+    );
+    params.insert(
+        "incorrect".to_string(),
+        TrialParam::Schedule(Box::new(ScheduleExpr::Special(Special {
+            kind: SpecialKind::Ext,
+        }))),
+    );
+    let node = ScheduleExpr::TrialBased(TrialBased {
+        trial_type: "GoNoGo".into(),
+        params,
+    });
+    let mut s = from_dsl_expr(&node, 1.0).unwrap();
+    let _ = s.step(0.0, None).unwrap();
+}
+
+#[test]
+fn bridge_aversive_sidman_builds() {
+    use contingency_dsl::ast::AversiveParam;
+    let mut params = BTreeMap::new();
+    params.insert(
+        "SSI".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 10.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    params.insert(
+        "RSI".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 5.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    let node = ScheduleExpr::AversiveSchedule(AversiveSchedule {
+        kind: AversiveKind::Sidman,
+        params,
+    });
+    let mut s = from_dsl_expr(&node, 1.0).unwrap();
+    assert!(!s.step(0.0, None).unwrap().reinforced);
+    // Shock at t=10.
+    assert!(s.step(10.0, None).unwrap().reinforced);
+}
+
+#[test]
+fn bridge_aversive_discrim_av_builds() {
+    use contingency_dsl::ast::AversiveParam;
+    let mut params = BTreeMap::new();
+    params.insert(
+        "CSUSInterval".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 5.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    params.insert(
+        "ITI".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 10.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    let node = ScheduleExpr::AversiveSchedule(AversiveSchedule {
+        kind: AversiveKind::DiscrimAv,
+        params,
+    });
+    let mut s = from_dsl_expr(&node, 1.0).unwrap();
+    // Starts in ITI; warning phase begins at t=10.
+    let _ = s.step(0.0, None).unwrap();
+    let _ = s.step(10.0, None).unwrap();
+    // Shock at warning_end=15.
+    let o = s.step(15.0, None).unwrap();
+    assert!(o.reinforced);
+}
+
+#[test]
+fn bridge_aversive_escape_builds() {
+    use contingency_dsl::ast::AversiveParam;
+    let mut params = BTreeMap::new();
+    params.insert(
+        "SafeDuration".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 3.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    params.insert(
+        "MaxShock".to_string(),
+        AversiveParam::Numeric(NumericPayload {
+            value: 5.0,
+            time_unit: Some("s".into()),
+        }),
+    );
+    let node = ScheduleExpr::AversiveSchedule(AversiveSchedule {
+        kind: AversiveKind::Escape,
+        params,
+    });
+    let mut s = from_dsl_expr(&node, 1.0).unwrap();
+    // First tick emits shock_onset.
+    let o = s.step(0.0, None).unwrap();
+    assert!(o.reinforced);
 }
 
 #[test]

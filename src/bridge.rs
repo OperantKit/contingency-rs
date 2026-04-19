@@ -20,19 +20,21 @@
 use indexmap::IndexMap;
 
 use contingency_dsl::ast::{
-    self, Atomic, CombinatorParamValue, Compound, CompoundParam, DirRef, DirectionalCOD, Modifier,
-    ModifierKind, NumericPayload, Program, ProgramSchedule, ScheduleExpr, SecondOrderSlot, Special,
-    SpecialKind,
+    self, Atomic, AversiveKind, AversiveParam, CombinatorParamValue, Compound, CompoundParam,
+    DirRef, DirectionalCOD, Modifier, ModifierKind, NumericPayload, Program, ProgramSchedule,
+    ScheduleExpr, SecondOrderSlot, Special, SpecialKind, TrialParam,
 };
 use contingency_dsl::enums::{Combinator, Distribution, Domain};
+use std::collections::BTreeMap;
 
 use crate::errors::ContingencyError;
 use crate::schedule::Schedule;
 use crate::schedules::{
     self, AdjustingSchedule, AdjustingTarget, Alternative, Chained, Concurrent, Conjunctive,
-    InterlockingSchedule, Interpolate, LimitedHold, Mixed, Multiple, Overlay, Percentile,
-    PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost, SecondOrder, Tandem,
-    Timeout, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
+    DiscriminatedAvoidance, Escape, GoNoGo, InterlockingSchedule, Interpolate, LimitedHold,
+    MatchingToSample, Mixed, Multiple, Overlay, Percentile, PercentileDirection, PercentileTarget,
+    ProgressiveRatio, ResponseCost, SecondOrder, Sidman, Tandem, Timeout, DRH, DRL, DRO, EXT, FI,
+    FR, FT, RI, RR, RT, VI, VR, VT,
 };
 use crate::Result;
 
@@ -98,12 +100,18 @@ pub fn from_dsl_expr(node: &ScheduleExpr, time_unit_seconds: f64) -> Result<Box<
             "unresolved IdentifierRef({:?}); call contingency_dsl analyze/expand on the Program first",
             r.name
         ))),
-        ScheduleExpr::TrialBased(_) => Err(ContingencyError::Config(
-            "TrialBased AST node is not yet supported by the bridge".into(),
-        )),
-        ScheduleExpr::AversiveSchedule(_) => Err(ContingencyError::Config(
-            "AversiveSchedule AST node is not yet supported by the bridge".into(),
-        )),
+        ScheduleExpr::TrialBased(t) => match t.trial_type.as_str() {
+            "MTS" => build_mts(&t.params, time_unit_seconds),
+            "GoNoGo" => build_go_nogo(&t.params, time_unit_seconds),
+            other => Err(ContingencyError::Config(format!(
+                "unknown TrialBased trial_type: {other:?}"
+            ))),
+        },
+        ScheduleExpr::AversiveSchedule(a) => match a.kind {
+            AversiveKind::Sidman => build_sidman(&a.params, time_unit_seconds),
+            AversiveKind::DiscrimAv => build_discrim_av(&a.params, time_unit_seconds),
+            AversiveKind::Escape => build_escape(&a.params, time_unit_seconds),
+        },
         ScheduleExpr::Respondent(_) | ScheduleExpr::RespondentExtension(_) => Err(
             ContingencyError::Config("Respondent AST node is not yet supported by the bridge".into()),
         ),
@@ -617,5 +625,227 @@ fn from_interlocking(
     Ok(Box::new(InterlockingSchedule::new(
         node.interlock_r0 as u64,
         decay,
+    )?))
+}
+
+// --- Aversive / TrialBased helpers ----------------------------------------
+
+fn aversive_numeric(
+    params: &BTreeMap<String, AversiveParam>,
+    key: &str,
+) -> Result<NumericPayload> {
+    match params.get(key) {
+        Some(AversiveParam::Numeric(n)) => Ok(n.clone()),
+        Some(_) => Err(ContingencyError::Config(format!(
+            "AversiveSchedule parameter {key:?} must be a numeric payload"
+        ))),
+        None => Err(ContingencyError::Config(format!(
+            "AversiveSchedule requires parameter {key:?}"
+        ))),
+    }
+}
+
+fn aversive_time_param(
+    params: &BTreeMap<String, AversiveParam>,
+    key: &str,
+    time_unit_seconds: f64,
+) -> Result<f64> {
+    let n = aversive_numeric(params, key)?;
+    scaled_payload(&n, time_unit_seconds)
+}
+
+fn aversive_magnitude(params: &BTreeMap<String, AversiveParam>) -> Result<f64> {
+    match params.get("magnitude") {
+        None => Ok(1.0),
+        Some(AversiveParam::Numeric(n)) => {
+            if n.time_unit.is_some() {
+                return Err(ContingencyError::Config(
+                    "AversiveSchedule 'magnitude' must not carry a time_unit".into(),
+                ));
+            }
+            Ok(n.value)
+        }
+        Some(_) => Err(ContingencyError::Config(
+            "AversiveSchedule 'magnitude' has unsupported form".into(),
+        )),
+    }
+}
+
+fn build_sidman(
+    params: &BTreeMap<String, AversiveParam>,
+    time_unit_seconds: f64,
+) -> Result<Box<dyn Schedule>> {
+    let ssi = aversive_time_param(params, "SSI", time_unit_seconds)?;
+    let rsi = aversive_time_param(params, "RSI", time_unit_seconds)?;
+    let mag = aversive_magnitude(params)?;
+    Ok(Box::new(Sidman::new(ssi, rsi, mag)?))
+}
+
+fn build_discrim_av(
+    params: &BTreeMap<String, AversiveParam>,
+    time_unit_seconds: f64,
+) -> Result<Box<dyn Schedule>> {
+    let warning = aversive_time_param(params, "CSUSInterval", time_unit_seconds)?;
+    let iti = aversive_time_param(params, "ITI", time_unit_seconds)?;
+    let mag = aversive_magnitude(params)?;
+    Ok(Box::new(DiscriminatedAvoidance::new(warning, iti, mag)?))
+}
+
+fn build_escape(
+    params: &BTreeMap<String, AversiveParam>,
+    time_unit_seconds: f64,
+) -> Result<Box<dyn Schedule>> {
+    let iti = aversive_time_param(params, "SafeDuration", time_unit_seconds)?;
+    let trial_duration = match params.get("MaxShock") {
+        Some(AversiveParam::Numeric(n)) => scaled_payload(n, time_unit_seconds)?,
+        Some(_) => {
+            return Err(ContingencyError::Config(
+                "AversiveSchedule 'MaxShock' must be a numeric payload".into(),
+            ))
+        }
+        None => 1.0e9,
+    };
+    let mag = aversive_magnitude(params)?;
+    Ok(Box::new(Escape::new(trial_duration, iti, mag)?))
+}
+
+// --- TrialBased helpers ---------------------------------------------------
+
+fn trial_param_f64(param: &TrialParam) -> Result<f64> {
+    match param {
+        TrialParam::Float(v) => Ok(*v),
+        TrialParam::Int(v) => Ok(*v as f64),
+        TrialParam::Numeric(n) => Ok(n.value),
+        other => Err(ContingencyError::Config(format!(
+            "TrialBased numeric parameter has unsupported form: {other:?}"
+        ))),
+    }
+}
+
+fn trial_param_unit(param: &TrialParam) -> Result<Option<&str>> {
+    match param {
+        TrialParam::Str(s) => Ok(Some(s.as_str())),
+        other => Err(ContingencyError::Config(format!(
+            "TrialBased unit parameter must be a string, got {other:?}"
+        ))),
+    }
+}
+
+fn trial_based_time(
+    params: &BTreeMap<String, TrialParam>,
+    value_key: &str,
+    unit_key: &str,
+    time_unit_seconds: f64,
+    default: Option<f64>,
+) -> Result<Option<f64>> {
+    let Some(val_param) = params.get(value_key) else {
+        return Ok(default);
+    };
+    let v = trial_param_f64(val_param)?;
+    let unit = match params.get(unit_key) {
+        Some(u) => trial_param_unit(u)?,
+        None => None,
+    };
+    Ok(Some(scaled_time(v, unit, time_unit_seconds)?))
+}
+
+fn bridge_nested(
+    param: Option<&TrialParam>,
+    time_unit_seconds: f64,
+) -> Result<Option<Box<dyn Schedule>>> {
+    match param {
+        None => Ok(None),
+        Some(TrialParam::Schedule(expr)) => {
+            let s = from_dsl_expr(expr, time_unit_seconds)?;
+            Ok(Some(s))
+        }
+        Some(other) => Err(ContingencyError::Config(format!(
+            "TrialBased nested schedule parameter has unsupported form: {other:?}"
+        ))),
+    }
+}
+
+fn build_mts(
+    params: &BTreeMap<String, TrialParam>,
+    time_unit_seconds: f64,
+) -> Result<Box<dyn Schedule>> {
+    let comparisons = match params.get("comparisons") {
+        Some(TrialParam::Int(n)) => *n,
+        Some(TrialParam::Float(v)) if v.fract() == 0.0 && *v >= 0.0 => *v as i64,
+        Some(other) => {
+            return Err(ContingencyError::Config(format!(
+                "MTS 'comparisons' must be an integer, got {other:?}"
+            )))
+        }
+        None => {
+            return Err(ContingencyError::Config(
+                "MTS requires a 'comparisons' parameter".into(),
+            ))
+        }
+    };
+    if comparisons < 0 || comparisons > u32::MAX as i64 {
+        return Err(ContingencyError::Config(format!(
+            "MTS 'comparisons' out of range: {comparisons}"
+        )));
+    }
+    let iti =
+        trial_based_time(params, "ITI", "ITI_unit", time_unit_seconds, Some(0.0))?
+            .unwrap_or(0.0);
+    let sample_duration =
+        trial_based_time(params, "delay", "delay_unit", time_unit_seconds, Some(0.0))?
+            .unwrap_or(0.0);
+    let choice_timeout = trial_based_time(
+        params,
+        "limitedHold",
+        "limitedHoldUnit",
+        time_unit_seconds,
+        None,
+    )?
+    .unwrap_or(5.0);
+    let consequence = bridge_nested(params.get("consequence"), time_unit_seconds)?;
+    let incorrect = bridge_nested(params.get("incorrect"), time_unit_seconds)?;
+    Ok(Box::new(MatchingToSample::new(
+        comparisons as u32,
+        sample_duration,
+        choice_timeout,
+        consequence,
+        incorrect,
+        iti,
+        None,
+    )?))
+}
+
+fn build_go_nogo(
+    params: &BTreeMap<String, TrialParam>,
+    time_unit_seconds: f64,
+) -> Result<Box<dyn Schedule>> {
+    let response_window = trial_based_time(
+        params,
+        "responseWindow",
+        "responseWindowUnit",
+        time_unit_seconds,
+        None,
+    )?
+    .ok_or_else(|| {
+        ContingencyError::Config("GoNoGo requires a 'responseWindow' parameter".into())
+    })?;
+    let iti =
+        trial_based_time(params, "ITI", "ITI_unit", time_unit_seconds, Some(0.0))?
+            .unwrap_or(0.0);
+    let go_probability = match params.get("go_probability") {
+        Some(p) => trial_param_f64(p)?,
+        None => 0.5,
+    };
+    let consequence = bridge_nested(params.get("consequence"), time_unit_seconds)?;
+    let correct_nogo = bridge_nested(params.get("incorrect"), time_unit_seconds)?;
+    let false_alarm = bridge_nested(params.get("falseAlarm"), time_unit_seconds)?;
+    Ok(Box::new(GoNoGo::new(
+        go_probability,
+        response_window,
+        iti,
+        consequence,
+        correct_nogo,
+        false_alarm,
+        None,
     )?))
 }

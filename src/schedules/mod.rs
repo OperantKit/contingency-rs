@@ -58,3 +58,9 @@ pub use overlay::*;
 
 pub mod interpolate;
 pub use interpolate::*;
+
+pub mod trial_based;
+pub use trial_based::*;
+
+pub mod aversive;
+pub use aversive::*;
