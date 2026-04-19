@@ -27,6 +27,7 @@ thiserror = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 indexmap = "2"
+contingency-dsl = { path = "../contingency-dsl-rs", package = "contingency-dsl" }
 pyo3 = { version = "0.22", optional = true, features = ["extension-module", "abi3-py38"] }
 uniffi = { version = "0.28", optional = true, features = ["cli"] }
 serialport = { version = "4", optional = true }
