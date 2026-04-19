@@ -22,3 +22,9 @@ pub use concurrent::*;
 
 pub mod sequence;
 pub use sequence::*;
+
+pub mod differential;
+pub use differential::*;
+
+pub mod progressive;
+pub use progressive::*;
