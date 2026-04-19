@@ -13,3 +13,12 @@ pub use interval::*;
 
 pub mod time_based;
 pub use time_based::*;
+
+pub mod alternative;
+pub use alternative::*;
+
+pub mod concurrent;
+pub use concurrent::*;
+
+pub mod sequence;
+pub use sequence::*;
