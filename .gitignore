@@ -1,0 +1,9 @@
+target/
+Cargo.lock.bak
+*.bak
+.DS_Store
+# Package-local scratch / planning / draft / review traces
+# See operantkit/.claude/rules/common/local-scratch-and-privacy.md
+.local/
+tmp/
+PLAN.md

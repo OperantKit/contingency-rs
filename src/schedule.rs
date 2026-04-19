@@ -1,0 +1,43 @@
+//! The `Schedule` trait — single abstraction every schedule implements.
+//!
+//! A schedule is a stateful object driven forward by `step`. Each step
+//! advances an internal clock to `now` and optionally registers a
+//! `ResponseEvent`. The schedule returns an `Outcome` describing
+//! whether the step produced reinforcement.
+//!
+//! Mirrors `contingency.interfaces.Schedule` in Python.
+
+use crate::{Outcome, Result, ResponseEvent};
+
+/// A reinforcement schedule.
+pub trait Schedule {
+    /// Advance to `now` and optionally register a response.
+    ///
+    /// # Contract
+    ///
+    /// - `now` must be `>=` the previous step's `now` (within `TIME_TOL`).
+    ///   Non-monotonic input returns `Err(ContingencyError::State(..))`.
+    /// - If `event` is `Some`, `event.time` must equal `now` within
+    ///   `TIME_TOL`.
+    /// - The returned `Outcome` obeys the invariant that `reinforced`
+    ///   iff `reinforcer.is_some()`.
+    fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome>;
+
+    /// Return the schedule to its post-construction state.
+    fn reset(&mut self);
+}
+
+/// Interval-family schedules wrappable by `LimitedHold` expose two
+/// protected hooks. Kept as a separate trait (not part of `Schedule`)
+/// so `LimitedHold` can wrap any implementation without leaking the
+/// internals into the public `Schedule` surface.
+pub trait ArmableSchedule: Schedule {
+    /// Absolute monotonic time at which the currently armed interval
+    /// elapses.
+    fn arm_time(&self) -> f64;
+
+    /// Resample the next interval anchored at `now`, *without*
+    /// delivering a reinforcer. Used by `LimitedHold` to withdraw a
+    /// missed opportunity.
+    fn withdraw_and_rearm(&mut self, now: f64);
+}
