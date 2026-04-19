@@ -19,26 +19,22 @@
 //! # Compound schedules
 //!
 //! Compound schedules (`Concurrent`, `Alternative`, `Multiple`,
-//! `Chained`, `Tandem`) are intentionally **not** exposed in this first
-//! UniFFI surface. Their crate-level struct definitions store
-//! `Box<dyn Schedule>` internally without a `Send` bound, which makes
-//! the compound type itself `!Send` and therefore unable to sit inside
-//! the `Mutex<...>` that `uniffi::Object` requires. The two viable
-//! paths for adding compound support are tracked as follow-up work:
+//! `Chained`, `Tandem`) are fully exposed. The crate-level
+//! [`crate::Schedule`] trait requires `Send`, which propagates through
+//! the compound types' `Box<dyn Schedule>` fields and lets them sit
+//! inside the `Mutex<SendableSchedule>` that UniFFI requires.
 //!
-//! 1. Introduce `+ Send` on the internal `Box<dyn Schedule>` fields of
-//!    the compound schedules (or on the [`crate::Schedule`] trait
-//!    itself). This is a non-breaking change for existing consumers
-//!    because every current concrete schedule implementation is
-//!    `Send`, but it must be coordinated across the wasm / FFI / PyO3
-//!    bindings.
-//! 2. Add a dedicated `CompoundBuilder` UniFFI object whose internal
-//!    storage is Send-bounded from the start and which owns its
-//!    component schedules outright (no shared `Arc` refs crossing the
-//!    boundary twice). This avoids touching the existing compound
-//!    struct definitions.
+//! ## Component ownership transfer
 //!
-//! Either approach is non-trivial and out of scope for this pass.
+//! UniFFI passes `Arc<Self>` arguments by reference. Compound
+//! constructors take ownership of their components via the
+//! [`UniffiSchedule::take_inner`] helper, which swaps the component's
+//! inner `Box<dyn Schedule>` with a harmless `EXT` stub and returns the
+//! original. Foreign-language callers that retain a reference to a
+//! component after passing it to a compound constructor will observe
+//! the stub `EXT` behaviour on that reference — the compound owns the
+//! real schedule. This matches the consumption semantics of the PyO3
+//! and wasm bindings.
 
 use std::sync::{Arc, Mutex};
 
@@ -49,18 +45,16 @@ use crate::{
 };
 
 // ---------------------------------------------------------------------------
-// Send-bounded schedule trait alias
+// Schedule trait-object aliases
 // ---------------------------------------------------------------------------
 //
 // UniFFI's `uniffi::Object` requires `Send + Sync`. The crate-level
-// `Schedule` trait is intentionally unconstrained so that the wasm /
-// PyO3 bindings can use non-`Send` schedule objects freely. All current
-// concrete, non-compound schedule implementations happen to be `Send`,
-// so we bound the trait object locally here without touching the trait
-// itself.
+// `Schedule` trait has `Send` as a supertrait so every `Box<dyn
+// Schedule>` is automatically `Send` — the aliases below simply name
+// the boxed form for readability.
 
-type SendableSchedule = Box<dyn Schedule + Send>;
-type SendableArmable = Box<dyn ArmableSchedule + Send>;
+type SendableSchedule = Box<dyn Schedule>;
+type SendableArmable = Box<dyn ArmableSchedule>;
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -190,6 +184,16 @@ impl UniffiSchedule {
         Arc::new(Self {
             inner: Mutex::new(Box::new(s)),
         })
+    }
+
+    /// Take the component's inner schedule, replacing it with a
+    /// harmless `EXT` stub. Used by compound constructors to transfer
+    /// ownership from a caller-held `Arc<UniffiSchedule>` into a
+    /// compound wrapper. The caller's handle remains valid but will
+    /// subsequently behave as `EXT` (never reinforce).
+    fn take_inner(s: &Arc<Self>) -> SendableSchedule {
+        let mut guard = s.inner.lock().expect("UniffiSchedule mutex poisoned");
+        std::mem::replace(&mut *guard, Box::new(schedules::EXT::new()))
     }
 }
 
@@ -434,5 +438,88 @@ impl UniffiSchedule {
     pub fn pr_richardson_roberts() -> Arc<Self> {
         let step_fn = schedules::richardson_roberts();
         Self::wrap(ProgressiveRatio::new(step_fn))
+    }
+
+    // ---- Compound schedules -------------------------------------------
+    //
+    // Each compound constructor consumes its component arguments via
+    // `take_inner` — after the call, foreign-language references to the
+    // original components behave as `EXT` (never reinforce). See the
+    // module-level "Component ownership transfer" note.
+
+    /// Alternative composer: reinforces whichever of `first` / `second`
+    /// fires first on any given step. Strictly binary — nest calls for
+    /// three or more branches: `Alternative(Alternative(a, b), c)`.
+    #[uniffi::constructor]
+    pub fn alternative(first: Arc<Self>, second: Arc<Self>) -> Arc<Self> {
+        let f = Self::take_inner(&first);
+        let s = Self::take_inner(&second);
+        Self::wrap(schedules::Alternative::new(f, s))
+    }
+
+    /// Multiple schedule: `components` alternate as the active
+    /// component on reinforcement, each presented under the
+    /// corresponding discriminative stimulus in `stimuli`. If
+    /// `stimuli` is `None`, default names `comp_0`, `comp_1`, ... are
+    /// used. Requires at least 2 components.
+    #[uniffi::constructor]
+    pub fn multiple(
+        components: Vec<Arc<Self>>,
+        stimuli: Option<Vec<String>>,
+    ) -> Result<Arc<Self>, UniffiContingencyError> {
+        let inner: Vec<SendableSchedule> = components.iter().map(Self::take_inner).collect();
+        Ok(Self::wrap(schedules::Multiple::new(inner, stimuli)?))
+    }
+
+    /// Chained schedule: `components` form a chain in which only the
+    /// terminal component delivers primary reinforcement; non-terminal
+    /// "reinforcements" advance the active component and are reported
+    /// as chain transitions on the returned `Outcome.meta`.
+    #[uniffi::constructor]
+    pub fn chained(
+        components: Vec<Arc<Self>>,
+        stimuli: Option<Vec<String>>,
+    ) -> Result<Arc<Self>, UniffiContingencyError> {
+        let inner: Vec<SendableSchedule> = components.iter().map(Self::take_inner).collect();
+        Ok(Self::wrap(schedules::Chained::new(inner, stimuli)?))
+    }
+
+    /// Tandem schedule: like `Chained` but without distinctive stimuli.
+    /// `meta["current_component"]` on each `Outcome` is reported as an
+    /// integer link index rather than a string.
+    #[uniffi::constructor]
+    pub fn tandem(
+        components: Vec<Arc<Self>>,
+    ) -> Result<Arc<Self>, UniffiContingencyError> {
+        let inner: Vec<SendableSchedule> = components.iter().map(Self::take_inner).collect();
+        Ok(Self::wrap(schedules::Tandem::new(inner)?))
+    }
+
+    /// Concurrent schedule with Changeover Delay (COD) and optional
+    /// Changeover Ratio (COR). `operanda` and `components` are
+    /// parallel arrays and must have the same length. `cod` is the
+    /// post-changeover lockout duration in the same time unit as
+    /// `step`'s `now`; `cor` is the number of consecutive responses on
+    /// the new operandum required to confirm a changeover (0 = every
+    /// switch counts immediately).
+    ///
+    /// References: Catania, A. C. (1966); Herrnstein, R. J. (1961).
+    #[uniffi::constructor]
+    pub fn concurrent(
+        operanda: Vec<String>,
+        components: Vec<Arc<Self>>,
+        cod: f64,
+        cor: u32,
+    ) -> Result<Arc<Self>, UniffiContingencyError> {
+        if operanda.len() != components.len() {
+            return Err(UniffiContingencyError::Config(
+                "concurrent: operanda and components length mismatch".into(),
+            ));
+        }
+        let mut map = indexmap::IndexMap::new();
+        for (name, comp) in operanda.into_iter().zip(components.iter()) {
+            map.insert(name, Self::take_inner(comp));
+        }
+        Ok(Self::wrap(schedules::Concurrent::new(map, cod, cor)?))
     }
 }
