@@ -1,21 +1,18 @@
-//! E2E test: drive the WASM bindings through `wasm-pack test --node`
-//! to prove the `src/wasm.rs` surface survives the wasm-bindgen
-//! pipeline when instantiated and called from a Node.js host.
+//! E2E test: build the WASM bindings with `wasm-pack build --target
+//! nodejs`, write a tiny Node.js driver that imports the generated JS
+//! shim and exercises `Schedule.fr(3)`, then run it with `node`.
 //!
-//! Skipped (passes with a stderr message) when any of the following
-//! are missing:
-//!   * `wasm-pack` on PATH
-//!   * `node` on PATH
-//!   * `wasm32-unknown-unknown` rustc target
+//! This flavour avoids the dev-dep pull-in that `wasm-pack test` does
+//! (proptest + its getrandom versions don't build for wasm32 without
+//! extra cfg flags). The build-and-run pipeline still proves:
+//!   1. The crate compiles to wasm32-unknown-unknown.
+//!   2. wasm-bindgen generates a working JS shim for every exposed
+//!      class / classmethod.
+//!   3. Node.js can load the shim and call through it end-to-end.
 //!
-//! The test itself is implemented as a `#[wasm_bindgen_test]` in
-//! `tests/wasm_smoke.rs`-style files that the project does not yet
-//! own; instead of checking in a WASM-only test crate (which would
-//! complicate the workspace), this harness delegates to
-//! `wasm-pack test --node` against the crate. If no wasm-bindgen
-//! tests are defined, wasm-pack exits with "no tests" which we
-//! interpret as a skip — still useful because it proves the crate
-//! at least compiles to wasm + links against wasm-bindgen shims.
+//! Soft-skipped (passes with a stderr message) when any of the
+//! following is missing: `wasm-pack`, `node`, or the
+//! `wasm32-unknown-unknown` rustc target.
 
 #![cfg(not(target_arch = "wasm32"))]
 
@@ -39,17 +36,15 @@ fn has_wasm_target() -> bool {
         .args(["target", "list", "--installed"])
         .output();
     match out {
-        Ok(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout).lines().any(|l| l.trim() == "wasm32-unknown-unknown")
-        }
-        // If rustup isn't around, we can't tell; let wasm-pack try and
-        // surface the real error.
+        Ok(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .any(|l| l.trim() == "wasm32-unknown-unknown"),
         _ => true,
     }
 }
 
 #[test]
-fn wasm_pack_test_node_smoke() {
+fn wasm_pack_build_and_node_smoke() {
     if !on_path("wasm-pack") {
         eprintln!("e2e_wasm: skipped — wasm-pack not on PATH");
         return;
@@ -59,74 +54,126 @@ fn wasm_pack_test_node_smoke() {
         return;
     }
     if !has_wasm_target() {
-        eprintln!(
-            "e2e_wasm: skipped — rustup target wasm32-unknown-unknown not installed"
-        );
+        eprintln!("e2e_wasm: skipped — rustup target wasm32-unknown-unknown not installed");
         return;
     }
 
     let crate_dir = manifest_dir();
+    let pkg_dir = crate_dir.join("pkg-e2e-smoke");
+    // Clean any stale output.
+    let _ = std::fs::remove_dir_all(&pkg_dir);
 
-    // wasm-pack test --node runs any `#[wasm_bindgen_test]` tests in
-    // the crate. When the crate defines none it exits with an error
-    // like "no tests to run"; we treat compile-success + that message
-    // as a soft pass (the pipeline still linked the wasm-bindgen
-    // shims).
-    let out = match Command::new("wasm-pack")
-        .args(["test", "--node"])
+    // 1. wasm-pack build --target nodejs --dev
+    let build = Command::new("wasm-pack")
+        .args([
+            "build",
+            "--target",
+            "nodejs",
+            "--dev",
+            "--out-dir",
+            pkg_dir.file_name().unwrap().to_str().unwrap(),
+        ])
         .current_dir(&crate_dir)
         .output()
-    {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("e2e_wasm: skipped — failed to invoke wasm-pack: {e}");
+        .expect("failed to invoke wasm-pack build");
+
+    if !build.status.success() {
+        let stderr = String::from_utf8_lossy(&build.stderr);
+        // Soft-skip known environment issues.
+        let skip_markers = [
+            "failed to download",
+            "Permission denied",
+            "network",
+            "command not found",
+        ];
+        if skip_markers.iter().any(|m| stderr.contains(m)) {
+            eprintln!("e2e_wasm: skipped — wasm-pack environment issue:\n{stderr}");
+            let _ = std::fs::remove_dir_all(&pkg_dir);
             return;
         }
-    };
-
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
-
-    if out.status.success() {
-        // Nothing more to assert beyond "it ran". Existing
-        // wasm_bindgen_test assertions inside the crate (if any) have
-        // already been checked by wasm-pack.
-        return;
-    }
-
-    // Soft-pass: no test fns defined. Compiling+linking still happened.
-    let combined = format!("{stdout}\n{stderr}");
-    let softpass_markers = [
-        "no tests to run",
-        "running 0 tests",
-        "0 passed; 0 failed",
-    ];
-    if softpass_markers.iter().any(|m| combined.contains(m)) {
-        eprintln!(
-            "e2e_wasm: wasm-pack ran but crate defines no #[wasm_bindgen_test] fns; \
-             treating as partial pass (compile+link succeeded)"
+        panic!(
+            "wasm-pack build failed\nstatus: {:?}\nstdout:\n{}\nstderr:\n{stderr}",
+            build.status,
+            String::from_utf8_lossy(&build.stdout),
         );
-        return;
     }
 
-    // Soft-skip on environment-level failures (missing nightly,
-    // sandboxed network for wasm-bindgen-cli download, etc.).
-    let skip_markers = [
-        "error: failed to download",
-        "Permission denied",
-        "network",
-        "could not find",
-        "command not found",
-    ];
-    if skip_markers.iter().any(|m| combined.contains(m)) {
-        eprintln!(
-            "e2e_wasm: skipped — wasm-pack environment issue:\n{combined}"
-        );
-        return;
-    }
+    // 2. Verify expected output files.
+    let js_shim = pkg_dir.join("contingency.js");
+    let wasm_bin = pkg_dir.join("contingency_bg.wasm");
+    assert!(
+        js_shim.exists(),
+        "expected JS shim at {}",
+        js_shim.display()
+    );
+    assert!(
+        wasm_bin.exists(),
+        "expected wasm binary at {}",
+        wasm_bin.display()
+    );
 
-    panic!(
-        "wasm-pack test --node failed\nstatus: {:?}\nstdout:\n{stdout}\nstderr:\n{stderr}",
-        out.status
+    // 3. Write a small Node.js driver.
+    let driver_path = pkg_dir.join("smoke.mjs");
+    std::fs::write(
+        &driver_path,
+        r#"// Node.js E2E smoke for contingency WASM bindings.
+// Require CommonJS style since wasm-pack --target nodejs emits CJS.
+const { Schedule, ResponseEvent } = require('./contingency.js');
+
+function assert(cond, msg) {
+    if (!cond) {
+        console.error('FAIL:', msg);
+        process.exit(1);
+    }
+}
+
+// FR(3): 1st/2nd responses non-reinforced, 3rd reinforced.
+const fr = Schedule.fr(3n);
+const r1 = fr.step(1.0, new ResponseEvent(1.0, 'main'));
+assert(!r1.reinforced, 'FR3 step 1 should not reinforce');
+const r2 = fr.step(2.0, new ResponseEvent(2.0, 'main'));
+assert(!r2.reinforced, 'FR3 step 2 should not reinforce');
+const r3 = fr.step(3.0, new ResponseEvent(3.0, 'main'));
+assert(r3.reinforced, 'FR3 step 3 should reinforce');
+assert(r3.reinforcer, 'FR3 step 3 should carry a reinforcer');
+assert(r3.reinforcer.label === 'SR+', 'expected SR+ label');
+assert(Math.abs(r3.reinforcer.time - 3.0) < 1e-9, 'expected time=3.0');
+
+// CRF reinforces every response.
+const crf = Schedule.crf();
+const c1 = crf.step(1.0, new ResponseEvent(1.0, 'main'));
+assert(c1.reinforced, 'CRF should reinforce every response');
+
+// EXT never reinforces.
+const ext = Schedule.ext();
+const e1 = ext.step(1.0, new ResponseEvent(1.0, 'main'));
+assert(!e1.reinforced, 'EXT should never reinforce');
+
+console.log('OK');
+"#,
+    )
+    .expect("write node driver");
+
+    // Rewrite as CJS if wasm-pack emitted CJS; but .mjs forces ESM, and
+    // the shim is CJS. Rename to .js to use CJS + require().
+    let driver_js = pkg_dir.join("smoke.js");
+    std::fs::rename(&driver_path, &driver_js).expect("rename driver to .js");
+
+    // 4. Run it.
+    let run = Command::new("node")
+        .arg(&driver_js)
+        .output()
+        .expect("failed to invoke node");
+
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    let stderr = String::from_utf8_lossy(&run.stderr);
+
+    // Cleanup regardless of outcome.
+    let _ = std::fs::remove_dir_all(&pkg_dir);
+
+    assert!(
+        run.status.success() && stdout.contains("OK"),
+        "node driver failed\nstatus: {:?}\nstdout:\n{stdout}\nstderr:\n{stderr}",
+        run.status,
     );
 }
