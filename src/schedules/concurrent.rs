@@ -55,7 +55,7 @@ use crate::{
     errors::ContingencyError,
     helpers::checks::{check_event, check_time},
     schedule::Schedule,
-    types::{MetaValue, Outcome, ResponseEvent},
+    types::{MetaValue, Outcome, Reinforcer, ResponseEvent},
     Result,
 };
 
@@ -84,8 +84,11 @@ pub struct Concurrent {
     components: IndexMap<String, Box<dyn Schedule>>,
     cod: f64,
     cor: u32,
+    cod_directional: Option<IndexMap<(String, String), f64>>,
+    punish: Option<IndexMap<String, Box<dyn Schedule>>>,
     last_operandum: Option<String>,
     switch_time: Option<f64>,
+    active_cod: f64,
     consecutive_new_count: u32,
     last_now: Option<f64>,
 }
@@ -96,8 +99,23 @@ impl std::fmt::Debug for Concurrent {
             .field("components", &self.components.keys().collect::<Vec<_>>())
             .field("cod", &self.cod)
             .field("cor", &self.cor)
+            .field(
+                "cod_directional",
+                &self
+                    .cod_directional
+                    .as_ref()
+                    .map(|m| m.keys().collect::<Vec<_>>()),
+            )
+            .field(
+                "punish",
+                &self
+                    .punish
+                    .as_ref()
+                    .map(|m| m.keys().collect::<Vec<_>>()),
+            )
             .field("last_operandum", &self.last_operandum)
             .field("switch_time", &self.switch_time)
+            .field("active_cod", &self.active_cod)
             .field("consecutive_new_count", &self.consecutive_new_count)
             .field("last_now", &self.last_now)
             .finish()
@@ -129,6 +147,30 @@ impl Concurrent {
         cod: f64,
         cor: u32,
     ) -> Result<Self> {
+        Self::with_extensions(components, cod, cor, None, None)
+    }
+
+    /// Extended constructor accepting optional directional COD and
+    /// per-operandum punishment schedules.
+    ///
+    /// * `cod_directional` — per-`(from, to)` override for the base
+    ///   `cod`. Keys must be `(from, to)` string pairs; self-
+    ///   transitions (`(a, a)`) are rejected. Empty maps are treated
+    ///   as `None`.
+    /// * `punish` — per-operandum punishment schedule. Keys must be
+    ///   operanda present in `components`. Each punisher is stepped
+    ///   on every `step` call so its internal clock stays aligned;
+    ///   only the event-matched operandum's punisher receives the
+    ///   event. When a punisher fires, its reinforcement surfaces as
+    ///   a negative-magnitude `SR-` outcome (or a net-magnitude
+    ///   compound when the base component also fires).
+    pub fn with_extensions(
+        components: IndexMap<String, Box<dyn Schedule>>,
+        cod: f64,
+        cor: u32,
+        cod_directional: Option<IndexMap<(String, String), f64>>,
+        punish: Option<IndexMap<String, Box<dyn Schedule>>>,
+    ) -> Result<Self> {
         if components.len() < 2 {
             return Err(ContingencyError::Config(format!(
                 "Concurrent requires >= 2 components, got {}",
@@ -140,12 +182,57 @@ impl Concurrent {
                 "Concurrent requires cod >= 0 and finite, got {cod}"
             )));
         }
+
+        // Validate cod_directional.
+        let cod_directional = match cod_directional {
+            Some(map) if map.is_empty() => None,
+            Some(map) => {
+                for (key, value) in map.iter() {
+                    let (from_op, to_op) = key;
+                    if from_op == to_op {
+                        return Err(ContingencyError::Config(format!(
+                            "Concurrent cod_directional rejects self-transition ({from_op:?}, {to_op:?})"
+                        )));
+                    }
+                    if !value.is_finite() || *value < 0.0 {
+                        return Err(ContingencyError::Config(format!(
+                            "Concurrent cod_directional values must be >= 0 and finite, got {value} for ({from_op:?}, {to_op:?})"
+                        )));
+                    }
+                }
+                Some(map)
+            }
+            None => None,
+        };
+
+        // Validate punish.
+        let punish = match punish {
+            Some(map) if map.is_empty() => None,
+            Some(map) => {
+                for key in map.keys() {
+                    if !components.contains_key(key) {
+                        let mut known: Vec<&str> =
+                            components.keys().map(|s| s.as_str()).collect();
+                        known.sort_unstable();
+                        return Err(ContingencyError::Config(format!(
+                            "Concurrent punish references unknown operandum {key:?}; known operanda: {known:?}"
+                        )));
+                    }
+                }
+                Some(map)
+            }
+            None => None,
+        };
+
         Ok(Self {
             components,
             cod,
             cor,
+            cod_directional,
+            punish,
             last_operandum: None,
             switch_time: None,
+            active_cod: cod,
             consecutive_new_count: 0,
             last_now: None,
         })
@@ -208,6 +295,17 @@ impl Concurrent {
         Ok((Outcome::empty(), false))
     }
 
+    /// Resolve the COD to arm for a switch `from_op -> to_op`. Uses
+    /// the directional override when present; otherwise the base.
+    fn resolve_cod(&self, from_op: &str, to_op: &str) -> f64 {
+        if let Some(map) = self.cod_directional.as_ref() {
+            if let Some(v) = map.get(&(from_op.to_string(), to_op.to_string())) {
+                return *v;
+            }
+        }
+        self.cod
+    }
+
     /// Update changeover bookkeeping for a response at `operandum`.
     fn register_event(&mut self, operandum: &str, now: f64) {
         match self.last_operandum.as_deref() {
@@ -224,14 +322,18 @@ impl Concurrent {
                 // Differs from previously confirmed operandum.
                 if self.cor == 0 {
                     // Immediate changeover.
+                    let from_op = self.last_operandum.clone().unwrap();
                     self.switch_time = Some(now);
+                    self.active_cod = self.resolve_cod(&from_op, operandum);
                     self.last_operandum = Some(operandum.to_string());
                     self.consecutive_new_count = 0;
                 } else {
                     // Build the streak; only confirm on the cor-th response.
                     self.consecutive_new_count += 1;
                     if self.consecutive_new_count >= self.cor {
+                        let from_op = self.last_operandum.clone().unwrap();
                         self.switch_time = Some(now);
+                        self.active_cod = self.resolve_cod(&from_op, operandum);
                         self.last_operandum = Some(operandum.to_string());
                         self.consecutive_new_count = 0;
                     }
@@ -242,7 +344,7 @@ impl Concurrent {
 
     /// Is reinforcement on `operandum` currently COD-gated?
     fn cod_active(&self, operandum: &str, now: f64) -> bool {
-        if self.cod <= 0.0 {
+        if self.active_cod <= 0.0 {
             return false;
         }
         let Some(switch_time) = self.switch_time else {
@@ -254,7 +356,7 @@ impl Concurrent {
         if last != operandum {
             return false;
         }
-        (now - switch_time) < self.cod - TIME_TOL
+        (now - switch_time) < self.active_cod - TIME_TOL
     }
 }
 
@@ -269,6 +371,12 @@ impl Schedule for Concurrent {
             // component may fire; its outcome is returned as-is
             // because no changeover is involved.
             let (outcome, _) = self.advance_components(now, None, None)?;
+            // Also advance punishment components' clocks on pure ticks.
+            if let Some(punish) = self.punish.as_mut() {
+                for p in punish.values_mut() {
+                    let _ = p.step(now, None)?;
+                }
+            }
             return Ok(outcome);
         };
 
@@ -292,11 +400,89 @@ impl Schedule for Concurrent {
         // covered by the COD window it opens (Catania, 1966).
         self.register_event(&operandum, now);
 
-        if outcome.reinforced && from_event && self.cod_active(&operandum, now) {
+        // Advance punishment schedules; only the matched operandum's
+        // punisher receives the event, the rest receive a tick.
+        let mut punish_outcome: Option<Outcome> = None;
+        if let Some(punish) = self.punish.as_mut() {
+            for (key, p) in punish.iter_mut() {
+                if key == &operandum {
+                    punish_outcome = Some(p.step(now, Some(event))?);
+                } else {
+                    let _ = p.step(now, None)?;
+                }
+            }
+        }
+
+        let cod_suppressed =
+            outcome.reinforced && from_event && self.cod_active(&operandum, now);
+        let base_fired = outcome.reinforced && from_event && !cod_suppressed;
+        let punisher_fired = punish_outcome
+            .as_ref()
+            .is_some_and(|p| p.reinforced);
+
+        if cod_suppressed && !punisher_fired {
+            // Absorb the reinforcement: component advanced but subject
+            // does not receive the reinforcer.
             return Ok(Outcome::empty()
                 .with_meta("cod_suppressed", MetaValue::Bool(true))
                 .with_meta("operandum", MetaValue::Str(operandum)));
         }
+
+        if base_fired && punisher_fired {
+            let b = outcome.reinforcer.as_ref().unwrap();
+            let p = punish_outcome.as_ref().unwrap().reinforcer.as_ref().unwrap();
+            let net = b.magnitude - p.magnitude;
+            let label = if net > 0.0 {
+                "SR+"
+            } else if net < 0.0 {
+                "SR-"
+            } else {
+                "SR0"
+            };
+            let mut out = Outcome {
+                reinforced: true,
+                reinforcer: Some(Reinforcer {
+                    time: b.time,
+                    magnitude: net,
+                    label: label.to_string(),
+                }),
+                ..Outcome::default()
+            };
+            out.meta
+                .insert("operandum".to_string(), MetaValue::Str(operandum));
+            out.meta
+                .insert("base_fired".to_string(), MetaValue::Bool(true));
+            out.meta
+                .insert("punisher_fired".to_string(), MetaValue::Bool(true));
+            out.meta
+                .insert("net_magnitude".to_string(), MetaValue::Float(net));
+            return Ok(out);
+        }
+
+        if punisher_fired {
+            let p = punish_outcome.as_ref().unwrap().reinforcer.as_ref().unwrap();
+            let mut out = Outcome {
+                reinforced: true,
+                reinforcer: Some(Reinforcer {
+                    time: p.time,
+                    magnitude: -p.magnitude,
+                    label: "SR-".to_string(),
+                }),
+                ..Outcome::default()
+            };
+            out.meta
+                .insert("operandum".to_string(), MetaValue::Str(operandum));
+            out.meta
+                .insert("punisher_fired".to_string(), MetaValue::Bool(true));
+            out.meta
+                .insert("base_fired".to_string(), MetaValue::Bool(false));
+            if cod_suppressed {
+                out.meta
+                    .insert("cod_suppressed".to_string(), MetaValue::Bool(true));
+            }
+            return Ok(out);
+        }
+
         Ok(outcome)
     }
 
@@ -304,8 +490,14 @@ impl Schedule for Concurrent {
         for (_, component) in self.components.iter_mut() {
             component.reset();
         }
+        if let Some(punish) = self.punish.as_mut() {
+            for p in punish.values_mut() {
+                p.reset();
+            }
+        }
         self.last_operandum = None;
         self.switch_time = None;
+        self.active_cod = self.cod;
         self.consecutive_new_count = 0;
         self.last_now = None;
     }
@@ -736,6 +928,156 @@ mod tests {
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         let out = sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(!out.meta.contains_key("cod_suppressed"));
+    }
+
+    // --- Directional COD ------------------------------------------------
+
+    #[test]
+    fn directional_cod_rejects_self_transition() {
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
+        let mut dir: IndexMap<(String, String), f64> = IndexMap::new();
+        dir.insert(("left".into(), "left".into()), 2.0);
+        let err = Concurrent::with_extensions(comps, 0.0, 0, Some(dir), None).unwrap_err();
+        assert!(matches!(err, ContingencyError::Config(_)));
+    }
+
+    #[test]
+    fn directional_cod_rejects_negative_value() {
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
+        let mut dir: IndexMap<(String, String), f64> = IndexMap::new();
+        dir.insert(("left".into(), "right".into()), -1.0);
+        let err = Concurrent::with_extensions(comps, 0.0, 0, Some(dir), None).unwrap_err();
+        assert!(matches!(err, ContingencyError::Config(_)));
+    }
+
+    #[test]
+    fn directional_cod_governs_each_direction() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut dir: IndexMap<(String, String), f64> = IndexMap::new();
+        dir.insert(("a".into(), "b".into()), 2.0);
+        dir.insert(("b".into(), "a".into()), 1.0);
+        let mut sch = Concurrent::with_extensions(m, 0.0, 0, Some(dir), None).unwrap();
+
+        // Anchor on 'a'.
+        assert!(sch.step(0.0, Some(&ev("a", 0.0))).unwrap().reinforced);
+        // Switch a->b at t=1.5: within 2s COD.
+        let out = sch.step(1.5, Some(&ev("b", 1.5))).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        // Past 2s COD at t=3.6.
+        let out = sch.step(3.6, Some(&ev("b", 3.6))).unwrap();
+        assert!(out.reinforced);
+        // Switch b->a at t=4.0: 1s COD.
+        let out = sch.step(4.0, Some(&ev("a", 4.0))).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        // Past 1s COD at t=5.1.
+        let out = sch.step(5.1, Some(&ev("a", 5.1))).unwrap();
+        assert!(out.reinforced);
+    }
+
+    #[test]
+    fn directional_cod_base_fallback_when_entry_missing() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        m.insert("c".into(), Box::new(FR::new(1).unwrap()));
+        let mut dir: IndexMap<(String, String), f64> = IndexMap::new();
+        dir.insert(("a".into(), "b".into()), 2.0);
+        let mut sch = Concurrent::with_extensions(m, 0.5, 0, Some(dir), None).unwrap();
+        // a->c uses base cod (0.5).
+        assert!(sch.step(0.0, Some(&ev("a", 0.0))).unwrap().reinforced);
+        let out = sch.step(0.1, Some(&ev("c", 0.1))).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        let out = sch.step(0.7, Some(&ev("c", 0.7))).unwrap();
+        assert!(out.reinforced);
+    }
+
+    // --- Punish ---------------------------------------------------------
+
+    #[test]
+    fn punish_rejects_unknown_operandum() {
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("c".into(), Box::new(FR::new(2).unwrap()));
+        let err = Concurrent::with_extensions(comps, 0.0, 0, None, Some(p)).unwrap_err();
+        assert!(matches!(err, ContingencyError::Config(_)));
+    }
+
+    #[test]
+    fn punish_reinforcement_and_punishment_net_magnitude() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        let mut sch = Concurrent::with_extensions(m, 0.0, 0, None, Some(p)).unwrap();
+        let out = sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        assert!(out.reinforced);
+        assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(true)));
+        assert_eq!(
+            out.meta.get("punisher_fired"),
+            Some(&MetaValue::Bool(true))
+        );
+        match out.meta.get("net_magnitude") {
+            Some(MetaValue::Float(v)) => assert!(v.abs() < 1e-9),
+            other => panic!("net_magnitude missing/wrong: {:?}", other),
+        }
+        let r = out.reinforcer.as_ref().unwrap();
+        assert_eq!(r.label, "SR0");
+    }
+
+    #[test]
+    fn punish_only_fires_when_base_does_not() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(2).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        let mut sch = Concurrent::with_extensions(m, 0.0, 0, None, Some(p)).unwrap();
+        let out = sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        assert!(out.reinforced);
+        assert_eq!(
+            out.meta.get("punisher_fired"),
+            Some(&MetaValue::Bool(true))
+        );
+        assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(false)));
+        let r = out.reinforcer.as_ref().unwrap();
+        assert_eq!(r.label, "SR-");
+        assert!((r.magnitude - (-1.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn punish_on_other_operandum_does_not_trigger() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(1).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut sch = Concurrent::with_extensions(m, 0.0, 0, None, Some(p)).unwrap();
+        // Respond on 'a': base fires, b's punisher should not advance.
+        let out = sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        assert!(out.reinforced);
+        let r = out.reinforcer.as_ref().unwrap();
+        assert_eq!(r.label, "SR+");
+    }
+
+    #[test]
+    fn punish_reset_clears_state() {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), Box::new(FR::new(2).unwrap()));
+        m.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("a".into(), Box::new(FR::new(2).unwrap()));
+        let mut sch = Concurrent::with_extensions(m, 0.0, 0, None, Some(p)).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        sch.reset();
+        // After reset: neither base (FR2) nor punisher (FR2) fires on 1st response.
+        let out = sch.step(1.0, Some(&ev("a", 1.0))).unwrap();
+        assert!(!out.reinforced);
     }
 
     #[test]

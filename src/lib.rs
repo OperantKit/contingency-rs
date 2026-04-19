@@ -7,12 +7,16 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![warn(missing_docs)]
 
+pub mod builder;
 pub mod constants;
 pub mod errors;
 pub mod helpers;
 pub mod schedule;
 pub mod schedules;
 pub mod types;
+pub mod hw;
+
+pub use builder::ScheduleBuilder;
 
 #[cfg(feature = "python")]
 pub mod python;
