@@ -17,10 +17,17 @@ pub mod types;
 #[cfg(feature = "python")]
 pub mod python;
 
-// `uniffi_api` module is a planned follow-up phase (KMP / Swift / Kotlin
-// bindings). The `uniffi` feature flag is reserved in `Cargo.toml` so the
-// scaffolding can land without a breaking interface change, but no module
-// is wired up yet — enabling the feature currently compiles to a no-op.
+#[cfg(not(target_arch = "wasm32"))]
+pub mod ffi;
+
+#[cfg(target_arch = "wasm32")]
+pub mod wasm;
+
+#[cfg(feature = "uniffi")]
+pub mod uniffi_api;
+
+#[cfg(feature = "uniffi")]
+uniffi::setup_scaffolding!();
 
 pub use constants::TIME_TOL;
 pub use errors::{ContingencyError, Result};

@@ -14,6 +14,11 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 name = "contingency-hil"
 path = "src/bin/hil.rs"
 
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+required-features = ["uniffi"]
+
 [dependencies]
 rand = { workspace = true }
 serde = { workspace = true }
@@ -28,11 +33,15 @@ uniffi = { version = "0.28", optional = true, features = ["cli"] }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 getrandom = { version = "0.2", features = ["js"] }
+serde-wasm-bindgen = "0.6"
 
 [features]
 default = []
 python = ["dep:pyo3"]
 uniffi = ["dep:uniffi"]
+
+[build-dependencies]
+cbindgen = "0.27"
 
 [dev-dependencies]
 proptest = "1"
