@@ -177,10 +177,17 @@ fn hil_ignores_unknown_message_types() {
     // Garbage + forward-compat unknown types should be silently dropped.
     writeln!(writer, "not-json-at-all").unwrap();
     writeln!(writer, r#"{{"type":"probe","time":0.5}}"#).unwrap();
-    writeln!(writer, r#"{{"type":"stimulus","time":0.5,"stimulus":"house_light","on":true}}"#)
-        .unwrap();
+    writeln!(
+        writer,
+        r#"{{"type":"stimulus","time":0.5,"stimulus":"house_light","on":true}}"#
+    )
+    .unwrap();
     // A real response on CRF should emit exactly one reinforcer.
-    writeln!(writer, r#"{{"type":"response","time":1.0,"operandum":"main"}}"#).unwrap();
+    writeln!(
+        writer,
+        r#"{{"type":"response","time":1.0,"operandum":"main"}}"#
+    )
+    .unwrap();
     writer.flush().unwrap();
 
     let mut line = String::new();

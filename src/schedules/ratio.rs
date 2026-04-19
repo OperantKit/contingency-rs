@@ -472,9 +472,7 @@ mod tests {
         while counts.len() < target {
             ticks += 1;
             if ticks > safety_cap {
-                panic!(
-                    "Schedule failed to produce {target} reinforcers in {safety_cap} steps"
-                );
+                panic!("Schedule failed to produce {target} reinforcers in {safety_cap} steps");
             }
             t += 1.0;
             responses_since_last += 1;

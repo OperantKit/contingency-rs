@@ -132,8 +132,8 @@ fn build_schedule(spec: &Value) -> Result<Box<dyn Schedule>> {
                 .get("response_count")
                 .and_then(Value::as_u64)
                 .ok_or_else(|| anyhow!("DRH requires integer 'response_count'"))?;
-            let n = u32::try_from(n)
-                .map_err(|_| anyhow!("DRH 'response_count' must fit in u32"))?;
+            let n =
+                u32::try_from(n).map_err(|_| anyhow!("DRH 'response_count' must fit in u32"))?;
             let w = params
                 .get("time_window")
                 .and_then(Value::as_f64)

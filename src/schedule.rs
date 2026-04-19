@@ -7,7 +7,7 @@
 //!
 //! Mirrors `contingency.interfaces.Schedule` in Python.
 
-use crate::{Outcome, Result, ResponseEvent};
+use crate::{Outcome, ResponseEvent, Result};
 
 /// A reinforcement schedule.
 pub trait Schedule {

@@ -686,8 +686,7 @@ mod tests {
         // For exponential(λ=1/mean), variance = mean^2. Check that the
         // empirical variance is of the right order (loose bound — the
         // discretisation dt biases variance slightly downward).
-        let var: f64 =
-            iris.iter().map(|x| (x - obs_mean).powi(2)).sum::<f64>() / iris.len() as f64;
+        let var: f64 = iris.iter().map(|x| (x - obs_mean).powi(2)).sum::<f64>() / iris.len() as f64;
         assert!(
             var > 0.5 * mean * mean && var < 2.0 * mean * mean,
             "var = {var}, expected ~{}",
@@ -765,10 +764,7 @@ mod tests {
         let mut s = EXT::new();
         s.step(10.0, None).unwrap();
         // Non-monotonic before reset → error.
-        assert!(matches!(
-            s.step(5.0, None),
-            Err(ContingencyError::State(_))
-        ));
+        assert!(matches!(s.step(5.0, None), Err(ContingencyError::State(_))));
         s.reset();
         // Post-reset, t=5.0 is fine.
         assert!(s.step(5.0, None).is_ok());
@@ -778,10 +774,7 @@ mod tests {
     fn ext_non_monotonic_time_error() {
         let mut s = EXT::new();
         s.step(1.0, None).unwrap();
-        assert!(matches!(
-            s.step(0.5, None),
-            Err(ContingencyError::State(_))
-        ));
+        assert!(matches!(s.step(0.5, None), Err(ContingencyError::State(_))));
     }
 
     #[test]
@@ -800,10 +793,7 @@ mod tests {
     fn ft_non_monotonic_time_rejected() {
         let mut s = FT::new(5.0).unwrap();
         s.step(2.0, None).unwrap();
-        assert!(matches!(
-            s.step(1.0, None),
-            Err(ContingencyError::State(_))
-        ));
+        assert!(matches!(s.step(1.0, None), Err(ContingencyError::State(_))));
     }
 
     #[test]
@@ -820,10 +810,7 @@ mod tests {
     fn vt_non_monotonic_time_rejected() {
         let mut s = VT::new(5.0, 12, Some(1)).unwrap();
         s.step(2.0, None).unwrap();
-        assert!(matches!(
-            s.step(1.0, None),
-            Err(ContingencyError::State(_))
-        ));
+        assert!(matches!(s.step(1.0, None), Err(ContingencyError::State(_))));
     }
 
     #[test]
@@ -840,10 +827,7 @@ mod tests {
     fn rt_non_monotonic_time_rejected() {
         let mut s = RT::new(2.0, Some(1)).unwrap();
         s.step(2.0, None).unwrap();
-        assert!(matches!(
-            s.step(1.0, None),
-            Err(ContingencyError::State(_))
-        ));
+        assert!(matches!(s.step(1.0, None), Err(ContingencyError::State(_))));
     }
 
     #[test]

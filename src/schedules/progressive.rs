@@ -362,18 +362,12 @@ mod tests {
 
     #[test]
     fn arithmetic_start_zero_raises() {
-        assert!(matches!(
-            arithmetic(0, 1),
-            Err(ContingencyError::Config(_))
-        ));
+        assert!(matches!(arithmetic(0, 1), Err(ContingencyError::Config(_))));
     }
 
     #[test]
     fn arithmetic_step_zero_raises() {
-        assert!(matches!(
-            arithmetic(1, 0),
-            Err(ContingencyError::Config(_))
-        ));
+        assert!(matches!(arithmetic(1, 0), Err(ContingencyError::Config(_))));
     }
 
     #[test]

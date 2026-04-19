@@ -18,11 +18,11 @@
 //! guaranteed for stochastic schedules. Conformance fixtures treat
 //! those as trajectory templates rather than exact replays.
 
+#[allow(unused_imports)]
+use rand::prelude::*;
 use rand::rngs::SmallRng;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
-#[allow(unused_imports)]
-use rand::prelude::*;
 
 fn make_rng(seed: Option<u64>) -> SmallRng {
     match seed {

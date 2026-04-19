@@ -207,7 +207,10 @@ mod tests {
         }
         assert!(fired_at.is_some());
         let t = fired_at.unwrap();
-        assert!((t - 0.5).abs() < 1e-9, "expected first fire at t=0.5, got {t}");
+        assert!(
+            (t - 0.5).abs() < 1e-9,
+            "expected first fire at t=0.5, got {t}"
+        );
     }
 
     #[test]

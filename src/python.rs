@@ -66,10 +66,7 @@ impl PyResponseEvent {
     #[pyo3(signature = (time, operandum = "main".to_string()))]
     fn new(time: f64, operandum: String) -> Self {
         Self {
-            inner: ResponseEvent {
-                time,
-                operandum,
-            },
+            inner: ResponseEvent { time, operandum },
         }
     }
 
@@ -165,12 +162,12 @@ impl PyOutcome {
     }
 
     fn __repr__(&self) -> String {
-        let kind = if self.inner.reinforced { "reinforced" } else { "empty" };
-        format!(
-            "Outcome({}, meta_len={})",
-            kind,
-            self.inner.meta.len()
-        )
+        let kind = if self.inner.reinforced {
+            "reinforced"
+        } else {
+            "empty"
+        };
+        format!("Outcome({}, meta_len={})", kind, self.inner.meta.len())
     }
 }
 
@@ -427,7 +424,8 @@ impl PySchedule {
         cod: f64,
         cor: u32,
     ) -> PyResult<Self> {
-        let mut map: IndexMap<String, Box<dyn Schedule>> = IndexMap::with_capacity(components.len());
+        let mut map: IndexMap<String, Box<dyn Schedule>> =
+            IndexMap::with_capacity(components.len());
         for (key, mut entry) in components {
             let stolen = take_inner(&mut entry)?;
             if map.insert(key.clone(), stolen).is_some() {

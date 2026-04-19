@@ -148,10 +148,7 @@ impl Multiple {
     /// * `stimuli.is_some()` and its length does not match the number
     ///   of components, or
     /// * duplicate stimulus names are provided.
-    pub fn new(
-        components: Vec<Box<dyn Schedule>>,
-        stimuli: Option<Vec<String>>,
-    ) -> Result<Self> {
+    pub fn new(components: Vec<Box<dyn Schedule>>, stimuli: Option<Vec<String>>) -> Result<Self> {
         validate_components(&components)?;
         let stimuli = validate_stimuli(stimuli, components.len())?;
         Ok(Self {
@@ -191,10 +188,7 @@ impl Schedule for Multiple {
             // Primary reinforcement; then advance (wrap) for the next step.
             self.active_index = (self.active_index + 1) % self.components.len();
             let mut meta = inner.meta.clone();
-            meta.insert(
-                "current_component".to_string(),
-                MetaValue::Str(stim_before),
-            );
+            meta.insert("current_component".to_string(), MetaValue::Str(stim_before));
             return Ok(Outcome {
                 reinforced: true,
                 reinforcer: inner.reinforcer,
@@ -203,10 +197,7 @@ impl Schedule for Multiple {
         }
 
         let mut meta = inner.meta.clone();
-        meta.insert(
-            "current_component".to_string(),
-            MetaValue::Str(stim_before),
-        );
+        meta.insert("current_component".to_string(), MetaValue::Str(stim_before));
         Ok(Outcome {
             reinforced: false,
             reinforcer: None,
@@ -283,10 +274,7 @@ impl Chained {
     /// * `stimuli.is_some()` and its length does not match the number
     ///   of components, or
     /// * duplicate stimulus names are provided.
-    pub fn new(
-        components: Vec<Box<dyn Schedule>>,
-        stimuli: Option<Vec<String>>,
-    ) -> Result<Self> {
+    pub fn new(components: Vec<Box<dyn Schedule>>, stimuli: Option<Vec<String>>) -> Result<Self> {
         validate_components(&components)?;
         let stimuli = validate_stimuli(stimuli, components.len())?;
         Ok(Self {
@@ -575,11 +563,8 @@ mod tests {
     fn multiple_routes_to_active_component_only() {
         // FR(3) active, FR(5) idle. Reinforcement should happen at the
         // 3rd response even though FR(5) would require 5.
-        let mut m = Multiple::new(
-            vec![fr(3), fr(5)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(3), fr(5)], Some(vec!["red".into(), "green".into()])).unwrap();
         assert!(!respond(&mut m, 1.0).reinforced);
         assert!(!respond(&mut m, 2.0).reinforced);
         let o = respond(&mut m, 3.0);
@@ -590,11 +575,8 @@ mod tests {
 
     #[test]
     fn multiple_advances_after_reinforcement_and_wraps() {
-        let mut m = Multiple::new(
-            vec![fr(2), fr(3)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(2), fr(3)], Some(vec!["red".into(), "green".into()])).unwrap();
         respond(&mut m, 1.0);
         let o_rf = respond(&mut m, 2.0);
         assert!(o_rf.reinforced);
@@ -629,11 +611,8 @@ mod tests {
 
     #[test]
     fn multiple_current_component_on_non_reinforced_step() {
-        let mut m = Multiple::new(
-            vec![fr(3), fr(3)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(3), fr(3)], Some(vec!["red".into(), "green".into()])).unwrap();
         let o = respond(&mut m, 1.0);
         assert!(!o.reinforced);
         assert_eq!(meta_str(&o, "current_component").unwrap(), "red");
@@ -643,11 +622,8 @@ mod tests {
     fn multiple_current_component_on_reinforced_step_is_firing_component() {
         // On reinforcement the reported stimulus is the one that just
         // fired; the next step runs under the next stimulus.
-        let mut m = Multiple::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(1), fr(1)], Some(vec!["red".into(), "green".into()])).unwrap();
         let o = respond(&mut m, 1.0);
         assert!(o.reinforced);
         assert_eq!(meta_str(&o, "current_component").unwrap(), "red");
@@ -658,11 +634,8 @@ mod tests {
 
     #[test]
     fn multiple_non_response_tick_does_not_advance() {
-        let mut m = Multiple::new(
-            vec![fr(2), fr(2)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(2), fr(2)], Some(vec!["red".into(), "green".into()])).unwrap();
         let o = m.step(1.0, None).unwrap();
         assert!(!o.reinforced);
         assert_eq!(m.active_index(), 0);
@@ -700,11 +673,8 @@ mod tests {
         // FT, the FT's anchor would advance and it would fire on its
         // first tick after activation. We verify the opposite: the FT
         // anchors only *after* becoming active.
-        let mut m = Multiple::new(
-            vec![fr(3), ft(0.5)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut m =
+            Multiple::new(vec![fr(3), ft(0.5)], Some(vec!["a".into(), "b".into()])).unwrap();
         // Many FR-directed responses; inactive FT must not advance.
         respond(&mut m, 1.0);
         respond(&mut m, 2.0);
@@ -725,11 +695,7 @@ mod tests {
 
     #[test]
     fn multiple_reset_returns_to_component_zero() {
-        let mut m = Multiple::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut m = Multiple::new(vec![fr(1), fr(1)], Some(vec!["a".into(), "b".into()])).unwrap();
         respond(&mut m, 1.0);
         assert_eq!(m.active_index(), 1);
         m.reset();
@@ -748,11 +714,7 @@ mod tests {
 
     #[test]
     fn multiple_reset_resets_each_component() {
-        let mut m = Multiple::new(
-            vec![fr(3), fr(3)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut m = Multiple::new(vec![fr(3), fr(3)], Some(vec!["a".into(), "b".into()])).unwrap();
         respond(&mut m, 1.0);
         respond(&mut m, 2.0);
         m.reset();
@@ -791,11 +753,8 @@ mod tests {
     fn chained_non_terminal_reinforcement_is_transition() {
         // FR2 -> FR3. Completing FR2 must NOT produce a Reinforcer;
         // only the FR3 terminal does.
-        let mut c = Chained::new(
-            vec![fr(2), fr(3)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut c =
+            Chained::new(vec![fr(2), fr(3)], Some(vec!["red".into(), "green".into()])).unwrap();
         respond(&mut c, 1.0);
         let o_trans = respond(&mut c, 2.0);
         assert!(!o_trans.reinforced);
@@ -808,11 +767,8 @@ mod tests {
 
     #[test]
     fn chained_terminal_produces_primary_reinforcer() {
-        let mut c = Chained::new(
-            vec![fr(2), fr(3)],
-            Some(vec!["red".into(), "green".into()]),
-        )
-        .unwrap();
+        let mut c =
+            Chained::new(vec![fr(2), fr(3)], Some(vec!["red".into(), "green".into()])).unwrap();
         respond(&mut c, 1.0);
         respond(&mut c, 2.0); // transition
         respond(&mut c, 3.0);
@@ -829,11 +785,7 @@ mod tests {
 
     #[test]
     fn chained_non_terminal_non_transition_step_carries_stimulus() {
-        let mut c = Chained::new(
-            vec![fr(3), fr(2)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut c = Chained::new(vec![fr(3), fr(2)], Some(vec!["a".into(), "b".into()])).unwrap();
         let o = respond(&mut c, 1.0);
         assert!(!o.reinforced);
         assert_eq!(meta_str(&o, "current_component").unwrap(), "a");
@@ -866,11 +818,7 @@ mod tests {
 
     #[test]
     fn chained_cycles_back_after_terminal() {
-        let mut c = Chained::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["x".into(), "y".into()]),
-        )
-        .unwrap();
+        let mut c = Chained::new(vec![fr(1), fr(1)], Some(vec!["x".into(), "y".into()])).unwrap();
         respond(&mut c, 1.0); // x -> y
         let o = respond(&mut c, 2.0);
         assert!(o.reinforced);
@@ -884,11 +832,7 @@ mod tests {
 
     #[test]
     fn chained_non_response_tick_does_not_transition() {
-        let mut c = Chained::new(
-            vec![fr(2), fr(2)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut c = Chained::new(vec![fr(2), fr(2)], Some(vec!["a".into(), "b".into()])).unwrap();
         let o = c.step(1.0, None).unwrap();
         assert!(!o.reinforced);
         assert_eq!(meta_str(&o, "current_component").unwrap(), "a");
@@ -898,11 +842,7 @@ mod tests {
 
     #[test]
     fn chained_reset_returns_to_link_zero() {
-        let mut c = Chained::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut c = Chained::new(vec![fr(1), fr(1)], Some(vec!["a".into(), "b".into()])).unwrap();
         respond(&mut c, 1.0);
         assert_eq!(c.active_index(), 1);
         c.reset();
@@ -912,11 +852,7 @@ mod tests {
 
     #[test]
     fn chained_reset_resets_components() {
-        let mut c = Chained::new(
-            vec![fr(3), fr(1)],
-            Some(vec!["a".into(), "b".into()]),
-        )
-        .unwrap();
+        let mut c = Chained::new(vec![fr(3), fr(1)], Some(vec!["a".into(), "b".into()])).unwrap();
         respond(&mut c, 1.0);
         respond(&mut c, 2.0);
         c.reset();
@@ -1074,21 +1010,14 @@ mod tests {
 
     #[test]
     fn multiple_duplicate_stimuli_rejected() {
-        let err = Multiple::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["red".into(), "red".into()]),
-        )
-        .unwrap_err();
+        let err =
+            Multiple::new(vec![fr(1), fr(1)], Some(vec!["red".into(), "red".into()])).unwrap_err();
         assert!(matches!(err, ContingencyError::Config(_)));
     }
 
     #[test]
     fn chained_duplicate_stimuli_rejected() {
-        let err = Chained::new(
-            vec![fr(1), fr(1)],
-            Some(vec!["g".into(), "g".into()]),
-        )
-        .unwrap_err();
+        let err = Chained::new(vec![fr(1), fr(1)], Some(vec!["g".into(), "g".into()])).unwrap_err();
         assert!(matches!(err, ContingencyError::Config(_)));
     }
 }

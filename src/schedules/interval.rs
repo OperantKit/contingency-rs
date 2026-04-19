@@ -206,11 +206,8 @@ impl VI {
 
     fn next_interval(&mut self) -> f64 {
         if self.cursor >= self.sequence.len() {
-            self.sequence = Self::generate(
-                self.mean_interval,
-                self.n_intervals,
-                &mut self.master_rng,
-            );
+            self.sequence =
+                Self::generate(self.mean_interval, self.n_intervals, &mut self.master_rng);
             self.cursor = 0;
         }
         let value = self.sequence[self.cursor];
@@ -241,11 +238,7 @@ impl Schedule for VI {
 
     fn reset(&mut self) {
         self.master_rng = make_master_rng(self.master_seed);
-        self.sequence = Self::generate(
-            self.mean_interval,
-            self.n_intervals,
-            &mut self.master_rng,
-        );
+        self.sequence = Self::generate(self.mean_interval, self.n_intervals, &mut self.master_rng);
         self.cursor = 1;
         self.arm_time = self.sequence[0];
         self.last_now = None;
@@ -801,10 +794,7 @@ mod tests {
         for (now, ev_time, expect_rf) in steps {
             let ev = ev_time.map(ResponseEvent::new);
             let out = lh.step(now, ev.as_ref()).unwrap();
-            assert_eq!(
-                out.reinforced, expect_rf,
-                "unexpected outcome at now={now}"
-            );
+            assert_eq!(out.reinforced, expect_rf, "unexpected outcome at now={now}");
             if expect_rf {
                 assert_eq!(out.reinforcer.as_ref().unwrap().time, now);
             }

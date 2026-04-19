@@ -285,8 +285,7 @@ impl Schedule for Concurrent {
         // Step components; only the matched one sees the event.
         // Advance before gating so that a suppressed reinforcer still
         // advances the component's state.
-        let (outcome, from_event) =
-            self.advance_components(now, Some(&operandum), Some(event))?;
+        let (outcome, from_event) = self.advance_components(now, Some(&operandum), Some(event))?;
 
         // Update changeover bookkeeping. This happens before gating so
         // that the response which completes a changeover is itself
@@ -321,7 +320,10 @@ mod tests {
     use super::*;
     use crate::schedules::{ratio::FR, time_based::FT};
 
-    fn make_two(left: Box<dyn Schedule>, right: Box<dyn Schedule>) -> IndexMap<String, Box<dyn Schedule>> {
+    fn make_two(
+        left: Box<dyn Schedule>,
+        right: Box<dyn Schedule>,
+    ) -> IndexMap<String, Box<dyn Schedule>> {
         let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
         m.insert("left".into(), left);
         m.insert("right".into(), right);
@@ -351,30 +353,21 @@ mod tests {
 
     #[test]
     fn config_rejects_negative_cod() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let err = Concurrent::new(comps, -0.1, 0).unwrap_err();
         assert!(matches!(err, ContingencyError::Config(_)));
     }
 
     #[test]
     fn config_rejects_nan_cod() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let err = Concurrent::new(comps, f64::NAN, 0).unwrap_err();
         assert!(matches!(err, ContingencyError::Config(_)));
     }
 
     #[test]
     fn config_defaults_accepted() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let sch = Concurrent::new(comps, 0.0, 0).unwrap();
         assert_eq!(sch.cod(), 0.0);
         assert_eq!(sch.cor(), 0);
@@ -384,10 +377,7 @@ mod tests {
 
     #[test]
     fn two_fr_components_independent_reinforcement() {
-        let comps = make_two(
-            Box::new(FR::new(3).unwrap()),
-            Box::new(FR::new(5).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(3).unwrap()), Box::new(FR::new(5).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
 
         assert!(!sch.step(0.1, Some(&ev("left", 0.1))).unwrap().reinforced);
@@ -422,10 +412,7 @@ mod tests {
 
     #[test]
     fn unknown_operandum_is_config_error() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         let err = sch.step(0.1, Some(&ev("center", 0.1))).unwrap_err();
         assert!(matches!(err, ContingencyError::Config(_)));
@@ -433,10 +420,7 @@ mod tests {
 
     #[test]
     fn tick_without_event_does_not_reinforce_response_based() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         for t in [0.0, 1.0, 10.0, 100.0] {
             let out = sch.step(t, None).unwrap();
@@ -449,10 +433,7 @@ mod tests {
 
     #[test]
     fn first_response_not_gated_by_cod() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         let out = sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(out.reinforced);
@@ -460,19 +441,13 @@ mod tests {
 
     #[test]
     fn switch_within_cod_suppresses_with_meta() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         let out = sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
         assert!(!out.reinforced);
         assert!(out.reinforcer.is_none());
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
         assert_eq!(
             out.meta.get("operandum"),
             Some(&MetaValue::Str("right".into()))
@@ -481,10 +456,7 @@ mod tests {
 
     #[test]
     fn response_after_cod_reinforces() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
@@ -495,10 +467,7 @@ mod tests {
 
     #[test]
     fn repeated_switches_reset_cod_timer() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(!sch.step(0.2, Some(&ev("right", 0.2))).unwrap().reinforced);
@@ -510,10 +479,7 @@ mod tests {
 
     #[test]
     fn non_switching_responses_not_gated() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 5.0, 0).unwrap();
         let out = sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(out.reinforced);
@@ -525,10 +491,7 @@ mod tests {
 
     #[test]
     fn cod_zero_never_suppresses() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         let out = sch.step(0.0001, Some(&ev("right", 0.0001))).unwrap();
@@ -538,10 +501,7 @@ mod tests {
 
     #[test]
     fn cod_exactly_at_boundary_is_not_suppressed() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
@@ -554,10 +514,7 @@ mod tests {
 
     #[test]
     fn cor_two_first_response_does_not_arm_cod() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 2).unwrap();
         assert!(sch.step(0.0, Some(&ev("left", 0.0))).unwrap().reinforced);
         let out = sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
@@ -567,45 +524,30 @@ mod tests {
 
     #[test]
     fn cor_two_second_response_arms_cod_and_suppresses_itself() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 2).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
         let out = sch.step(0.6, Some(&ev("right", 0.6))).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
     }
 
     #[test]
     fn cor_three_requires_three_consecutive() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 3).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(sch.step(0.1, Some(&ev("right", 0.1))).unwrap().reinforced);
         assert!(sch.step(0.2, Some(&ev("right", 0.2))).unwrap().reinforced);
         let out = sch.step(0.3, Some(&ev("right", 0.3))).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
     }
 
     #[test]
     fn cor_streak_broken_by_returning_to_old_operandum() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 3).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.1, Some(&ev("right", 0.1))).unwrap();
@@ -615,10 +557,7 @@ mod tests {
         sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
         let out = sch.step(0.6, Some(&ev("right", 0.6))).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
     }
 
     #[test]
@@ -640,18 +579,12 @@ mod tests {
 
     #[test]
     fn cor_zero_immediate_switch() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         let out = sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
     }
 
     // --- Time advancement -------------------------------------------------
@@ -712,10 +645,7 @@ mod tests {
 
     #[test]
     fn non_monotonic_time_is_state_error() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         sch.step(1.0, None).unwrap();
         let err = sch.step(0.5, None).unwrap_err();
@@ -724,10 +654,7 @@ mod tests {
 
     #[test]
     fn event_time_mismatch_is_state_error() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         let err = sch.step(1.0, Some(&ev("left", 1.1))).unwrap_err();
         assert!(matches!(err, ContingencyError::State(_)));
@@ -735,10 +662,7 @@ mod tests {
 
     #[test]
     fn time_within_tolerance_accepted() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         sch.step(1.0, None).unwrap();
         sch.step(1.0 - 1e-12, None).unwrap();
@@ -748,10 +672,7 @@ mod tests {
 
     #[test]
     fn reset_clears_changeover_state() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.5, Some(&ev("right", 0.5))).unwrap();
@@ -762,10 +683,7 @@ mod tests {
 
     #[test]
     fn reset_resets_component_state() {
-        let comps = make_two(
-            Box::new(FR::new(3).unwrap()),
-            Box::new(FR::new(3).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(3).unwrap()), Box::new(FR::new(3).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.1, Some(&ev("left", 0.1))).unwrap();
@@ -777,10 +695,7 @@ mod tests {
 
     #[test]
     fn reset_clears_last_now() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 0.0, 0).unwrap();
         sch.step(10.0, None).unwrap();
         sch.reset();
@@ -789,10 +704,7 @@ mod tests {
 
     #[test]
     fn reset_clears_cor_streak() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 2).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(0.1, Some(&ev("right", 0.1))).unwrap();
@@ -804,20 +716,14 @@ mod tests {
 
     #[test]
     fn suppressed_outcome_carries_full_meta() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         let out = sch.step(0.3, Some(&ev("right", 0.3))).unwrap();
         assert!(!out.reinforced);
         assert!(out.reinforcer.is_none());
         assert_eq!(out.meta.len(), 2);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
         assert_eq!(
             out.meta.get("operandum"),
             Some(&MetaValue::Str("right".into()))
@@ -826,10 +732,7 @@ mod tests {
 
     #[test]
     fn non_suppressed_outcome_has_no_cod_meta() {
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
         let out = sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         assert!(!out.meta.contains_key("cod_suppressed"));
@@ -840,19 +743,13 @@ mod tests {
         // Left FR(1), right FR(2) — the suppressed reinforcement must
         // still advance the right component's count (so a fresh FR(2)
         // must be completed to reinforce again).
-        let comps = make_two(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(2).unwrap()),
-        );
+        let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(2).unwrap()));
         let mut sch = Concurrent::new(comps, 10.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(1.0, Some(&ev("right", 1.0))).unwrap();
         let out = sch.step(1.5, Some(&ev("right", 1.5))).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(
-            out.meta.get("cod_suppressed"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
         // First response after COD — count goes to 1.
         let out = sch.step(12.0, Some(&ev("right", 12.0))).unwrap();
         assert!(!out.reinforced);

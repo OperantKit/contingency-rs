@@ -344,12 +344,7 @@ fn run_fixture(relative: &str) {
     for (i, step) in fixture.steps.iter().enumerate() {
         let outcome: Outcome = schedule
             .step(step.now, step.event.as_ref())
-            .unwrap_or_else(|e| {
-                panic!(
-                    "{} step {}: schedule.step raised error: {e}",
-                    relative, i
-                )
-            });
+            .unwrap_or_else(|e| panic!("{} step {}: schedule.step raised error: {e}", relative, i));
         assert_eq!(
             outcome.reinforced, step.expect.reinforced,
             "{} step {}: reinforced mismatch (now={}, event={:?})",
@@ -406,9 +401,7 @@ fn run_stochastic_fixture(relative: &str) {
     for (i, step) in fixture.steps.iter().enumerate() {
         let outcome = schedule
             .step(step.now, step.event.as_ref())
-            .unwrap_or_else(|e| {
-                panic!("{} step {}: schedule.step raised: {e}", relative, i)
-            });
+            .unwrap_or_else(|e| panic!("{} step {}: schedule.step raised: {e}", relative, i));
         if outcome.reinforced {
             rust_count += 1;
             if first_rein_time.is_none() {
@@ -416,11 +409,7 @@ fn run_stochastic_fixture(relative: &str) {
             }
         }
     }
-    let expected_count = fixture
-        .steps
-        .iter()
-        .filter(|s| s.expect.reinforced)
-        .count();
+    let expected_count = fixture.steps.iter().filter(|s| s.expect.reinforced).count();
     // Loose tolerance: PRNG trajectories differ, so only assert the
     // order of magnitude matches. 50% band around the Python count.
     let lower = (expected_count as f64 * 0.5).floor() as usize;

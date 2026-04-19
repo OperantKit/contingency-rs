@@ -579,7 +579,10 @@ mod tests {
         dro.step(0.0, None).unwrap();
         let ev = ResponseEvent::new(5.0);
         let out = dro.step(5.0, Some(&ev)).unwrap();
-        assert!(out.reinforced, "boundary-coincident event must not pollute closing window");
+        assert!(
+            out.reinforced,
+            "boundary-coincident event must not pollute closing window"
+        );
         let out = dro.step(10.0, None).unwrap();
         assert!(!out.reinforced, "polluted next window must not reinforce");
     }
