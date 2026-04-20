@@ -2,6 +2,8 @@ target/
 Cargo.lock.bak
 *.bak
 .DS_Store
+# wasm-pack build output (generated, consumed by frontend via file: dep)
+pkg/
 # Package-local scratch / planning / draft / review traces
 # See operantkit/.claude/rules/common/local-scratch-and-privacy.md
 .local/
