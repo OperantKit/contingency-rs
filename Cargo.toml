@@ -1,9 +1,9 @@
 [package]
 name = "contingency"
 version = "0.1.0"
-edition.workspace = true
-license.workspace = true
-repository.workspace = true
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/OperantKit/contingency-rs"
 description = "Reinforcement contingency engine — Rust port of contingency-py. Mirrors the executable specification defined by the Python package and its conformance fixtures."
 
 [lib]
@@ -20,14 +20,13 @@ path = "src/bin/uniffi_bindgen.rs"
 required-features = ["uniffi"]
 
 [dependencies]
-rand = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-anyhow = { workspace = true }
-clap = { workspace = true }
+rand = { version = "0.8", features = ["small_rng"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
 indexmap = "2"
-contingency-dsl = { path = "../contingency-dsl-rs", package = "contingency-dsl" }
 pyo3 = { version = "0.22", optional = true, features = ["extension-module", "abi3-py38"] }
 uniffi = { version = "0.28", optional = true, features = ["cli"] }
 serialport = { version = "4", optional = true }
@@ -48,4 +47,12 @@ cbindgen = "0.27"
 
 [dev-dependencies]
 proptest = "1"
-serde_json = { workspace = true }
+serde_json = "1"
+
+# Release profile is optimised for the bench harness — debug-assert off,
+# overflow checks off, single codegen unit so timing measurements are not
+# polluted by per-crate optimisation boundaries.
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = false
