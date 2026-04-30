@@ -7,7 +7,6 @@
 #![deny(clippy::undocumented_unsafe_blocks)]
 #![warn(missing_docs)]
 
-pub mod bridge;
 pub mod builder;
 pub mod constants;
 pub mod errors;
@@ -17,7 +16,6 @@ pub mod schedules;
 pub mod types;
 pub mod hw;
 
-pub use bridge::{from_dsl_expr, from_dsl_program, from_dsl_str};
 pub use builder::ScheduleBuilder;
 
 #[cfg(feature = "python")]
