@@ -1,5 +1,5 @@
 //! Concurrent compound schedule with Changeover Delay (COD) and
-//! Changeover Ratio (COR).
+//! Fixed-Ratio Changeover (FRCO).
 //!
 //! A concurrent schedule presents two or more component schedules on
 //! distinct *operanda* (keys, levers, buttons). Each component is a
@@ -20,12 +20,12 @@
 //! "since-last-changeover" semantics of Catania (1966): each fresh
 //! switch re-anchors the COD clock.
 //!
-//! # Changeover Ratio (COR)
+//! # Fixed-Ratio Changeover (FRCO)
 //!
-//! With `cor > 0`, a switch is not counted as a changeover until the
-//! subject has emitted `cor` *consecutive* responses on the new
-//! operandum. The COD timer arms only on the `cor`-th such response
-//! (and at that response's timestamp). Responses `1..cor-1` on the
+//! With `frco > 0`, a switch is not counted as a changeover until the
+//! subject has emitted `frco` *consecutive* responses on the new
+//! operandum. The COD timer arms only on the `frco`-th such response
+//! (and at that response's timestamp). Responses `1..frco-1` on the
 //! new operandum are not yet "a changeover" and are therefore not
 //! gated; reinforcement on those early responses is allowed.
 //!
@@ -59,7 +59,7 @@ use crate::{
     Result,
 };
 
-/// Concurrent schedule with changeover gating (COD + COR).
+/// Concurrent schedule with changeover gating (COD + FRCO).
 ///
 /// Construct with an ordered map of component schedules keyed by
 /// operandum identifier. Responses bearing `operandum == k` are
@@ -83,7 +83,7 @@ use crate::{
 pub struct Concurrent {
     components: IndexMap<String, Box<dyn Schedule>>,
     cod: f64,
-    cor: u32,
+    frco: u32,
     cod_directional: Option<IndexMap<(String, String), f64>>,
     punish: Option<IndexMap<String, Box<dyn Schedule>>>,
     last_operandum: Option<String>,
@@ -98,7 +98,7 @@ impl std::fmt::Debug for Concurrent {
         f.debug_struct("Concurrent")
             .field("components", &self.components.keys().collect::<Vec<_>>())
             .field("cod", &self.cod)
-            .field("cor", &self.cor)
+            .field("frco", &self.frco)
             .field(
                 "cod_directional",
                 &self
@@ -134,7 +134,7 @@ impl Concurrent {
     ///   changeover, reinforcement on the new operandum is suppressed
     ///   for `cod` time units. `0.0` disables COD. Must be `>= 0` and
     ///   finite.
-    /// * `cor` — Changeover Ratio: number of consecutive responses on
+    /// * `frco` — fixed-ratio changeover: number of consecutive responses on
     ///   a new operandum required for the switch to count as a
     ///   changeover. `0` treats every switch as immediate.
     ///
@@ -145,9 +145,9 @@ impl Concurrent {
     pub fn new(
         components: IndexMap<String, Box<dyn Schedule>>,
         cod: f64,
-        cor: u32,
+        frco: u32,
     ) -> Result<Self> {
-        Self::with_extensions(components, cod, cor, None, None)
+        Self::with_extensions(components, cod, frco, None, None)
     }
 
     /// Extended constructor accepting optional directional COD and
@@ -167,7 +167,7 @@ impl Concurrent {
     pub fn with_extensions(
         components: IndexMap<String, Box<dyn Schedule>>,
         cod: f64,
-        cor: u32,
+        frco: u32,
         cod_directional: Option<IndexMap<(String, String), f64>>,
         punish: Option<IndexMap<String, Box<dyn Schedule>>>,
     ) -> Result<Self> {
@@ -227,7 +227,7 @@ impl Concurrent {
         Ok(Self {
             components,
             cod,
-            cor,
+            frco,
             cod_directional,
             punish,
             last_operandum: None,
@@ -243,9 +243,9 @@ impl Concurrent {
         self.cod
     }
 
-    /// The configured changeover ratio.
-    pub fn cor(&self) -> u32 {
-        self.cor
+    /// The configured fixed-ratio changeover.
+    pub fn frco(&self) -> u32 {
+        self.frco
     }
 
     /// The set of component keys in insertion order.
@@ -320,7 +320,7 @@ impl Concurrent {
             }
             Some(_) => {
                 // Differs from previously confirmed operandum.
-                if self.cor == 0 {
+                if self.frco == 0 {
                     // Immediate changeover.
                     let from_op = self.last_operandum.clone().unwrap();
                     self.switch_time = Some(now);
@@ -328,9 +328,9 @@ impl Concurrent {
                     self.last_operandum = Some(operandum.to_string());
                     self.consecutive_new_count = 0;
                 } else {
-                    // Build the streak; only confirm on the cor-th response.
+                    // Build the streak; only confirm on the frco-th response.
                     self.consecutive_new_count += 1;
-                    if self.consecutive_new_count >= self.cor {
+                    if self.consecutive_new_count >= self.frco {
                         let from_op = self.last_operandum.clone().unwrap();
                         self.switch_time = Some(now);
                         self.active_cod = self.resolve_cod(&from_op, operandum);
@@ -562,7 +562,7 @@ mod tests {
         let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap()));
         let sch = Concurrent::new(comps, 0.0, 0).unwrap();
         assert_eq!(sch.cod(), 0.0);
-        assert_eq!(sch.cor(), 0);
+        assert_eq!(sch.frco(), 0);
     }
 
     // --- Basic routing ----------------------------------------------------
@@ -702,7 +702,7 @@ mod tests {
         assert!(out.reinforced);
     }
 
-    // --- COR semantics ----------------------------------------------------
+    // --- FRCO semantics ----------------------------------------------------
 
     #[test]
     fn cor_two_first_response_does_not_arm_cod() {

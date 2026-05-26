@@ -27,12 +27,12 @@ https://doi.org/10.1901/jeab.1961.4-267
 れる）。タイマーは切り替え反応でアンカーし、その後の確定した
 切り替えごとに再アンカーする。
 
-### チェンジオーバー比率 (COR / FRCO)
+### 固定比率切替 (FRCO)
 
-`cor > 0` の場合、切り替えは新しい operandum 上で `cor` 回連続で
+`frco > 0` の場合、切り替えは新しい operandum 上で `frco` 回連続で
 反応して初めて *チェンジオーバーとしてカウントされる*。COD タイマ
-ーはその `cor` 番目の反応でのみアームされる。新しい operandum 上
-の反応 `1..cor-1` はまだ「チェンジオーバー」ではないため、COD の
+ーはその `frco` 番目の反応でのみアームされる。新しい operandum 上
+の反応 `1..frco-1` はまだ「チェンジオーバー」ではないため、COD の
 ゲート対象には **ならない**。
 
 ## 状態変数
@@ -41,10 +41,10 @@ https://doi.org/10.1901/jeab.1961.4-267
 |---|---|---|
 | `components` | dict[str, Schedule] | operandum キーごとのコンポーネント・スケジュール。 |
 | `cod` | float (const) | COD 持続時間 (`>= 0`; `0` で無効)。 |
-| `cor` | int (const) | COR 閾値 (`>= 0`; `0` で無効)。 |
+| `frco` | int (const) | FRCO 閾値 (`>= 0`; `0` で無効)。 |
 | `last_operandum` | str? | 最新の **確定** 反応の operandum。 |
 | `switch_time` | float? | 最後の確定チェンジオーバーの時刻（COD 用）。 |
-| `consecutive_new_count` | int | COR 連続中のランニング・カウント。 |
+| `consecutive_new_count` | int | FRCO 連続中のランニング・カウント。 |
 | `last_now` | float? | 単調時間チェック用。 |
 
 ## Step 擬似コード
@@ -103,10 +103,10 @@ from_event)` を返す:
 - `operandum == last_operandum`: `consecutive_new_count = 0` にリ
   セット。
 - `operandum != last_operandum`:
-  - `cor == 0` の場合: `switch_time = now`、
+  - `frco == 0` の場合: `switch_time = now`、
     `last_operandum = operandum`、連続リセット。即時チェンジオーバー。
-  - `cor > 0` の場合: `consecutive_new_count` をインクリメント。
-    `cor` に達したときチェンジオーバーを確定する（`switch_time = now`、
+  - `frco > 0` の場合: `consecutive_new_count` をインクリメント。
+    `frco` に達したときチェンジオーバーを確定する（`switch_time = now`、
     `last_operandum = operandum`、連続リセット）。
 
 ### `cod_active(operandum, now)`
@@ -130,7 +130,7 @@ from_event)` を返す:
 ## エッジケース
 
 - コンポーネントが `< 2` 個: `Config`。
-- 負の `cod` または `cor`: `Config`。
+- 負の `cod` または `frco`: `Config`。
 - イベントに未知の operandum: `Config`。
 - **ゲーティング順序**: チェンジオーバー反応はそれが開く COD
   ウィンドウに覆われる。新しい operandum に切り替えて同じ反応で

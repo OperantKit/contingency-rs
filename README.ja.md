@@ -8,7 +8,7 @@ Rust 製強化スケジュールエンジン。[`contingency-py`](../contingency
 
 - 原子的スケジュール: FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT
 - Limited Hold ラッパ
-- 複合スケジュール: Concurrent (+ COD + COR), Multiple, Chained, Tandem, Alternative
+- 複合スケジュール: Concurrent (+ COD + FRCO), Multiple, Chained, Tandem, Alternative
 - 分化強化: DRO (Resetting / Momentary), DRL, DRH
 - 累進比率 (Progressive Ratio) + ステップ関数 (arithmetic, geometric, Richardson-Roberts)
 - Fleshler-Hoffman VI/VR 生成器 (1962 + Hantula 1991)

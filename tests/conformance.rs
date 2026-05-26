@@ -190,8 +190,8 @@ fn build_schedule(spec: &ScheduleSpec) -> Box<dyn Schedule> {
                 components.insert(key.clone(), build_schedule(&cspec));
             }
             let cod = optional_f64(params, "cod").unwrap_or(0.0);
-            let cor = optional_u64(params, "cor").unwrap_or(0) as u32;
-            Box::new(Concurrent::new(components, cod, cor).expect("Concurrent params"))
+            let frco = optional_u64(params, "frco").unwrap_or(0) as u32;
+            Box::new(Concurrent::new(components, cod, frco).expect("Concurrent params"))
         }
         "Alternative" => {
             let first_spec = inner_spec(params, "first");

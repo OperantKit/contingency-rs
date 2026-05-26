@@ -496,10 +496,10 @@ impl UniffiSchedule {
     }
 
     /// Concurrent schedule with Changeover Delay (COD) and optional
-    /// Changeover Ratio (COR). `operanda` and `components` are
+    /// Fixed-Ratio Changeover (FRCO). `operanda` and `components` are
     /// parallel arrays and must have the same length. `cod` is the
     /// post-changeover lockout duration in the same time unit as
-    /// `step`'s `now`; `cor` is the number of consecutive responses on
+    /// `step`'s `now`; `frco` is the number of consecutive responses on
     /// the new operandum required to confirm a changeover (0 = every
     /// switch counts immediately).
     ///
@@ -509,7 +509,7 @@ impl UniffiSchedule {
         operanda: Vec<String>,
         components: Vec<Arc<Self>>,
         cod: f64,
-        cor: u32,
+        frco: u32,
     ) -> Result<Arc<Self>, UniffiContingencyError> {
         if operanda.len() != components.len() {
             return Err(UniffiContingencyError::Config(
@@ -520,6 +520,6 @@ impl UniffiSchedule {
         for (name, comp) in operanda.into_iter().zip(components.iter()) {
             map.insert(name, Self::take_inner(comp));
         }
-        Ok(Self::wrap(schedules::Concurrent::new(map, cod, cor)?))
+        Ok(Self::wrap(schedules::Concurrent::new(map, cod, frco)?))
     }
 }

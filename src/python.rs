@@ -417,12 +417,12 @@ impl PySchedule {
     /// ``components`` is a list of ``(operandum, schedule)`` tuples; each
     /// schedule is consumed. Insertion order is preserved.
     #[classmethod]
-    #[pyo3(signature = (components, cod = 0.0, cor = 0))]
+    #[pyo3(signature = (components, cod = 0.0, frco = 0))]
     fn concurrent(
         _cls: &Bound<'_, PyType>,
         components: Vec<(String, PyRefMut<'_, PySchedule>)>,
         cod: f64,
-        cor: u32,
+        frco: u32,
     ) -> PyResult<Self> {
         let mut map: IndexMap<String, Box<dyn Schedule>> =
             IndexMap::with_capacity(components.len());
@@ -435,7 +435,7 @@ impl PySchedule {
             }
         }
         Ok(Self::from_box(Box::new(
-            schedules::Concurrent::new(map, cod, cor).map_err(map_err)?,
+            schedules::Concurrent::new(map, cod, frco).map_err(map_err)?,
         )))
     }
 

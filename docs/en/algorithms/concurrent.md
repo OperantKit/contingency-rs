@@ -27,11 +27,11 @@ the new operandum is suppressed (consumed silently) for `cod` time
 units after the switch. The timer anchors on the switching response
 and re-anchors on every subsequent confirmed switch.
 
-### Changeover Ratio (COR / FRCO)
+### Fixed-Ratio Changeover (FRCO)
 
-With `cor > 0`, a switch only *counts* as a changeover after `cor`
+With `frco > 0`, a switch only *counts* as a changeover after `frco`
 consecutive responses on the new operandum. The COD timer arms only
-on the `cor`-th such response. Responses `1..cor-1` on the new
+on the `frco`-th such response. Responses `1..frco-1` on the new
 operandum are not yet "a changeover" and are **not** COD-gated.
 
 ## State variables
@@ -40,10 +40,10 @@ operandum are not yet "a changeover" and are **not** COD-gated.
 |---|---|---|
 | `components` | dict[str, Schedule] | Component schedules by operandum key. |
 | `cod` | float (const) | COD duration (`>= 0`; `0` disables). |
-| `cor` | int (const) | COR threshold (`>= 0`; `0` disables). |
+| `frco` | int (const) | FRCO threshold (`>= 0`; `0` disables). |
 | `last_operandum` | str? | Operandum of the most recent **confirmed** response. |
 | `switch_time` | float? | Time of the last confirmed changeover (for COD). |
-| `consecutive_new_count` | int | Running count during a COR streak. |
+| `consecutive_new_count` | int | Running count during a FRCO streak. |
 | `last_now` | float? | Monotonic-time check. |
 
 ## Step pseudocode
@@ -99,10 +99,10 @@ another operandum.
   reset streak. Not a changeover.
 - `operandum == last_operandum`: reset `consecutive_new_count = 0`.
 - `operandum != last_operandum`:
-  - if `cor == 0`: set `switch_time = now`,
+  - if `frco == 0`: set `switch_time = now`,
     `last_operandum = operandum`, reset streak. Immediate changeover.
-  - if `cor > 0`: increment `consecutive_new_count`. When it reaches
-    `cor`, confirm the changeover (set `switch_time = now`,
+  - if `frco > 0`: increment `consecutive_new_count`. When it reaches
+    `frco`, confirm the changeover (set `switch_time = now`,
     `last_operandum = operandum`, reset streak).
 
 ### `cod_active(operandum, now)`
@@ -126,7 +126,7 @@ Returns `True` iff:
 ## Edge cases
 
 - `< 2` components: `Config`.
-- Negative `cod` or `cor`: `Config`.
+- Negative `cod` or `frco`: `Config`.
 - Unknown operandum in event: `Config`.
 - **Gating order**: the changeover response is covered by the COD
   window it opens. Switching to a new operandum and earning a

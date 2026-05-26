@@ -8,7 +8,7 @@ Rust reinforcement schedule engine. Port of [`contingency-py`](../contingency-py
 
 - Atomic schedules: FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT
 - LimitedHold wrapper
-- Compound: Concurrent (+ COD + COR), Multiple, Chained, Tandem, Alternative
+- Compound: Concurrent (+ COD + FRCO), Multiple, Chained, Tandem, Alternative
 - Differential: DRO (Resetting / Momentary), DRL, DRH
 - Progressive Ratio + step functions (arithmetic, geometric, Richardson-Roberts)
 - Fleshler-Hoffman VI/VR generators (1962 + Hantula 1991)

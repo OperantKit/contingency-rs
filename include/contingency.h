@@ -360,7 +360,7 @@ OpkSchedule *opk_tandem(OpkSchedule *const *components, uintptr_t len);
  * * `components` — array of `len` schedule handles, paired 1:1 with
  *   `operanda`.
  * * `cod` — changeover delay.
- * * `cor` — changeover ratio.
+ * * `frco` — fixed-ratio changeover.
  *
  * On failure, every component handle is freed.
  *
@@ -373,7 +373,7 @@ OpkSchedule *opk_concurrent(const char *const *operanda,
                             OpkSchedule *const *components,
                             uintptr_t len,
                             double cod,
-                            uint32_t cor);
+                            uint32_t frco);
 
 #ifdef __cplusplus
 }  // extern "C"

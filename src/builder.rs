@@ -215,9 +215,9 @@ impl ScheduleBuilder {
     pub fn concurrent(
         components: IndexMap<String, Box<dyn Schedule>>,
         cod: f64,
-        cor: u32,
+        frco: u32,
     ) -> Result<Box<dyn Schedule>> {
-        Ok(Box::new(schedules::Concurrent::new(components, cod, cor)?))
+        Ok(Box::new(schedules::Concurrent::new(components, cod, frco)?))
     }
 }
 

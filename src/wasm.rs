@@ -412,7 +412,7 @@ impl JsSchedule {
         operanda: Vec<String>,
         components: Vec<JsSchedule>,
         cod: f64,
-        cor: u32,
+        frco: u32,
     ) -> Result<JsSchedule, JsValue> {
         if operanda.len() != components.len() {
             return Err(JsError::new(
@@ -431,7 +431,7 @@ impl JsSchedule {
             }
         }
         Ok(Self::from_box(Box::new(
-            schedules::Concurrent::new(map, cod, cor).map_err(err_to_js)?,
+            schedules::Concurrent::new(map, cod, frco).map_err(err_to_js)?,
         )))
     }
 

@@ -884,7 +884,7 @@ pub unsafe extern "C" fn opk_tandem(
 /// * `components` — array of `len` schedule handles, paired 1:1 with
 ///   `operanda`.
 /// * `cod` — changeover delay.
-/// * `cor` — changeover ratio.
+/// * `frco` — fixed-ratio changeover.
 ///
 /// On failure, every component handle is freed.
 ///
@@ -898,7 +898,7 @@ pub unsafe extern "C" fn opk_concurrent(
     components: *const *mut OpkSchedule,
     len: usize,
     cod: f64,
-    cor: u32,
+    frco: u32,
 ) -> *mut OpkSchedule {
     if len == 0 {
         set_last_error("opk_concurrent: requires at least 2 components, got 0");
@@ -952,7 +952,7 @@ pub unsafe extern "C" fn opk_concurrent(
             return std::ptr::null_mut();
         }
     }
-    match handle_error(schedules::Concurrent::new(map, cod, cor)) {
+    match handle_error(schedules::Concurrent::new(map, cod, frco)) {
         Some(s) => box_schedule(s),
         None => std::ptr::null_mut(),
     }
