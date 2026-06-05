@@ -28,7 +28,9 @@ fn fr3_reinforces_on_third_response() {
 
     let r3 = s.step(3.0, Some(response(3.0, "main"))).unwrap();
     assert!(r3.reinforced);
-    let reinforcer = r3.reinforcer.expect("expected reinforcer on FR3 completion");
+    let reinforcer = r3
+        .reinforcer
+        .expect("expected reinforcer on FR3 completion");
     assert_eq!(reinforcer.label, "SR+");
 }
 
@@ -67,7 +69,10 @@ fn reset_returns_to_initial_state() {
     s.step(1.0, Some(response(1.0, "main"))).unwrap();
     s.reset();
     let r1 = s.step(2.0, Some(response(2.0, "main"))).unwrap();
-    assert!(!r1.reinforced, "post-reset FR2 should not reinforce on 1st response");
+    assert!(
+        !r1.reinforced,
+        "post-reset FR2 should not reinforce on 1st response"
+    );
     let r2 = s.step(3.0, Some(response(3.0, "main"))).unwrap();
     assert!(r2.reinforced);
 }
@@ -143,7 +148,10 @@ fn chained_only_terminal_produces_primary_reinforcement() {
     let chain = UniffiSchedule::chained(vec![c1, c2], None).unwrap();
 
     let transition = chain.step(1.0, Some(response(1.0, "main"))).unwrap();
-    assert!(!transition.reinforced, "non-terminal transition is unreinforced");
+    assert!(
+        !transition.reinforced,
+        "non-terminal transition is unreinforced"
+    );
 
     let t1 = chain.step(2.0, Some(response(2.0, "main"))).unwrap();
     assert!(!t1.reinforced);
@@ -186,12 +194,7 @@ fn concurrent_routes_by_operandum_with_cod_zero() {
 #[test]
 fn concurrent_rejects_length_mismatch() {
     let only = UniffiSchedule::fr(1).unwrap();
-    match UniffiSchedule::concurrent(
-        vec!["left".into(), "right".into()],
-        vec![only],
-        0.0,
-        0,
-    ) {
+    match UniffiSchedule::concurrent(vec!["left".into(), "right".into()], vec![only], 0.0, 0) {
         Ok(_) => panic!("length mismatch must be rejected"),
         Err(e) => assert!(e.to_string().contains("length mismatch")),
     }

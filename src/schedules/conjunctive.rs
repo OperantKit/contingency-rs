@@ -222,11 +222,8 @@ mod tests {
 
     #[test]
     fn event_forwarded_to_both_components() {
-        let mut conj = Conjunctive::new(
-            Box::new(FR::new(3).unwrap()),
-            Box::new(FR::new(3).unwrap()),
-        )
-        .unwrap();
+        let mut conj =
+            Conjunctive::new(Box::new(FR::new(3).unwrap()), Box::new(FR::new(3).unwrap())).unwrap();
         respond(&mut conj, 1.0);
         respond(&mut conj, 2.0);
         let out = respond(&mut conj, 3.0);
@@ -263,11 +260,8 @@ mod tests {
 
     #[test]
     fn reinforced_outcome_has_conjunctive_flag() {
-        let mut conj = Conjunctive::new(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        )
-        .unwrap();
+        let mut conj =
+            Conjunctive::new(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap())).unwrap();
         let out = respond(&mut conj, 1.0);
         assert!(out.reinforced);
         assert_eq!(out.meta.get("conjunctive"), Some(&MetaValue::Bool(true)));
@@ -289,13 +283,9 @@ mod tests {
 
     #[test]
     fn three_component_conjunctive_via_nesting() {
-        let inner = Conjunctive::new(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(1).unwrap()),
-        )
-        .unwrap();
-        let mut conj =
-            Conjunctive::new(Box::new(inner), Box::new(FR::new(1).unwrap())).unwrap();
+        let inner =
+            Conjunctive::new(Box::new(FR::new(1).unwrap()), Box::new(FR::new(1).unwrap())).unwrap();
+        let mut conj = Conjunctive::new(Box::new(inner), Box::new(FR::new(1).unwrap())).unwrap();
         let out = respond(&mut conj, 1.0);
         assert!(out.reinforced);
     }

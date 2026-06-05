@@ -214,9 +214,8 @@ unsafe fn cstr_to_string(ptr: *const c_char) -> std::result::Result<String, &'st
 
 fn write_outcome(handle: &mut OpkSchedule, outcome: &Outcome, out: &mut OpkOutcome) {
     if let Some(r) = outcome.reinforcer.as_ref() {
-        let label = CString::new(r.label.as_str()).unwrap_or_else(|_| {
-            CString::new("<invalid label>").expect("static ASCII is valid")
-        });
+        let label = CString::new(r.label.as_str())
+            .unwrap_or_else(|_| CString::new("<invalid label>").expect("static ASCII is valid"));
         let ptr = label.as_ptr();
         handle.last_label = Some(label);
         *out = OpkOutcome {
@@ -418,11 +417,7 @@ pub extern "C" fn opk_vi(
 
 /// Random-Interval schedule (exponential).
 #[no_mangle]
-pub extern "C" fn opk_ri(
-    mean_interval: f64,
-    has_seed: bool,
-    seed: u64,
-) -> *mut OpkSchedule {
+pub extern "C" fn opk_ri(mean_interval: f64, has_seed: bool, seed: u64) -> *mut OpkSchedule {
     let s = if has_seed { Some(seed) } else { None };
     match handle_error(schedules::RI::new(mean_interval, s)) {
         Some(v) => box_schedule(v),
@@ -522,10 +517,7 @@ pub unsafe extern "C" fn opk_limited_hold_ri(
 ///
 /// `inner` must be a valid `OpkArmableSchedule` pointer and not yet
 /// freed or consumed.
-unsafe fn limited_hold_consume(
-    inner: *mut OpkArmableSchedule,
-    hold: f64,
-) -> *mut OpkSchedule {
+unsafe fn limited_hold_consume(inner: *mut OpkArmableSchedule, hold: f64) -> *mut OpkSchedule {
     if inner.is_null() {
         set_last_error("opk_limited_hold_*: null inner handle");
         return std::ptr::null_mut();
@@ -570,11 +562,7 @@ pub extern "C" fn opk_vt(
 
 /// Random-Time schedule (exponential).
 #[no_mangle]
-pub extern "C" fn opk_rt(
-    mean_interval: f64,
-    has_seed: bool,
-    seed: u64,
-) -> *mut OpkSchedule {
+pub extern "C" fn opk_rt(mean_interval: f64, has_seed: bool, seed: u64) -> *mut OpkSchedule {
     let s = if has_seed { Some(seed) } else { None };
     match handle_error(schedules::RT::new(mean_interval, s)) {
         Some(v) => box_schedule(v),
@@ -946,9 +934,7 @@ pub unsafe extern "C" fn opk_concurrent(
     let mut map: IndexMap<String, Box<dyn Schedule>> = IndexMap::with_capacity(len);
     for (k, b) in keys.into_iter().zip(boxes.into_iter()) {
         if map.insert(k.clone(), b).is_some() {
-            set_last_error(format!(
-                "opk_concurrent: duplicate operandum key {k:?}"
-            ));
+            set_last_error(format!("opk_concurrent: duplicate operandum key {k:?}"));
             return std::ptr::null_mut();
         }
     }

@@ -17,12 +17,29 @@
 //! tests are marked `#[ignore]` with an explicit relaxation rationale;
 //! see each test's doc comment.
 //!
+//! # Parity corpus is single-source
+//!
+//! The directory `../contingency-py/conformance/` is the **single
+//! source of truth** for the cross-language parity corpus:
+//! `contingency-py` emits every fixture, and this Rust harness is
+//! obligated to replay **every deterministic fixture** bit-equivalently
+//! through [`run_fixture`]. That obligation is enforced mechanically by
+//! `conformance_corpus_completeness`, which walks the corpus, classifies
+//! each fixture (a fixture is *stochastic* iff its schedule subtree
+//! contains any seeded type `VR`/`VI`/`RI`/`RR`/`VT`/`RT`), and fails if
+//! any deterministic fixture lacks a `run_fixture(...)` call. A newly
+//! generated deterministic fixture therefore cannot land un-replayed,
+//! and commenting out a `run_fixture(...)` line trips the same guard.
+//! Only the stochastic fixtures are exempt from bit-equivalent replay;
+//! they stay `#[ignore]`d (see below).
+//!
 //! # References
 //!
 //! Fleshler, M., & Hoffman, H. S. (1962). A progression for generating
 //! variable-interval schedules. *Journal of the Experimental Analysis
 //! of Behavior*, 5(4), 529-530. <https://doi.org/10.1901/jeab.1962.5-529>
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use indexmap::IndexMap;
@@ -484,6 +501,16 @@ fn compound_alternative_fr_ft() {
 }
 
 #[test]
+fn compound_multiple_fr_fr() {
+    run_fixture("compound/multiple_fr_fr.json");
+}
+
+#[test]
+fn compound_tandem_fr_fr() {
+    run_fixture("compound/tandem_fr_fr.json");
+}
+
+#[test]
 fn differential_dro_resetting() {
     run_fixture("differential/dro_resetting.json");
 }
@@ -555,4 +582,165 @@ fn atomic_ri_seeded_5() {
 #[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_rt_seeded_11() {
     run_stochastic_fixture("atomic/rt_seeded_11.json");
+}
+
+// -----------------------------------------------------------------------------
+// Completeness guard — no deterministic fixture may go un-replayed
+// -----------------------------------------------------------------------------
+//
+// The parity corpus lives entirely under
+// `../contingency-py/conformance/`; `contingency-py` is its single
+// source of truth. This guard fails the build whenever a *deterministic*
+// fixture exists in the corpus without a corresponding bit-equivalent
+// `run_fixture(...)` replay call in this harness. It catches two drift
+// modes mechanically:
+//
+//   1. A newly generated deterministic fixture is committed but no
+//      `run_fixture(...)` test is added for it.
+//   2. An existing `run_fixture(...)` call is removed or commented out.
+//
+// Stochastic (seeded VR/VI/RI/RR/VT/RT) fixtures are intentionally
+// exempt: they are replayed structurally via `run_stochastic_fixture`
+// under `#[ignore]`, because Rust's `SmallRng` cannot bit-reproduce
+// Python's Mersenne Twister.
+
+/// Seeded schedule types whose trajectories depend on a PRNG stream and
+/// therefore cannot be bit-reproduced across the Python/Rust boundary.
+const STOCHASTIC_TYPES: [&str; 6] = ["VR", "VI", "RI", "RR", "VT", "RT"];
+
+/// A fixture is stochastic iff its schedule subtree (recursively,
+/// through `components` arrays/objects, `inner`, `first`, `second`,
+/// etc.) contains any [`STOCHASTIC_TYPES`] schedule. Walking the raw
+/// JSON keeps this independent of the spec → schedule translator.
+fn schedule_is_stochastic(v: &serde_json::Value) -> bool {
+    match v {
+        serde_json::Value::Object(map) => {
+            if let Some(serde_json::Value::String(ty)) = map.get("type") {
+                if STOCHASTIC_TYPES.contains(&ty.as_str()) {
+                    return true;
+                }
+            }
+            map.values().any(schedule_is_stochastic)
+        }
+        serde_json::Value::Array(items) => items.iter().any(schedule_is_stochastic),
+        _ => false,
+    }
+}
+
+/// Recursively collect every `*.json` fixture under `dir`, returning
+/// paths relative to `root` with `/` separators (e.g.
+/// `compound/multiple_fr_fr.json`).
+fn collect_fixtures(root: &Path, dir: &Path, out: &mut Vec<String>) {
+    let entries = std::fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("failed to read dir {}: {e}", dir.display()));
+    for entry in entries {
+        let path = entry
+            .unwrap_or_else(|e| panic!("dir entry error under {}: {e}", dir.display()))
+            .path();
+        if path.is_dir() {
+            collect_fixtures(root, &path, out);
+        } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
+            let rel = path
+                .strip_prefix(root)
+                .unwrap_or(&path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            out.push(rel);
+        }
+    }
+}
+
+/// Parse this harness's own source and return the set of fixture paths
+/// passed to `run_fixture("...")`. Commented-out calls are excluded
+/// (only the code portion of each line, before any `//`, is scanned),
+/// so commenting a call out makes the corresponding fixture appear
+/// un-replayed — exactly the RED signal the completeness guard exists
+/// to surface. `run_stochastic_fixture("...")` is *not* matched: the
+/// literal `run_fixture("` is not a substring of it, and the word-
+/// boundary check below rejects any identifier-prefixed match.
+fn replayed_fixtures() -> HashSet<String> {
+    const NEEDLE: &str = "run_fixture(\"";
+    let src_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("conformance.rs");
+    let src = std::fs::read_to_string(&src_path)
+        .unwrap_or_else(|e| panic!("failed to read harness source {}: {e}", src_path.display()));
+
+    let mut out = HashSet::new();
+    for line in src.lines() {
+        // Strip any line comment so commented-out calls do not count.
+        let code = match line.find("//") {
+            Some(idx) => &line[..idx],
+            None => line,
+        };
+        let mut from = 0;
+        while let Some(rel_pos) = code[from..].find(NEEDLE) {
+            let start = from + rel_pos;
+            // Word boundary: the char before `run_fixture(` must not be
+            // part of a longer identifier (defends against any
+            // `*_run_fixture("` lookalike).
+            let prev_is_ident = code[..start]
+                .chars()
+                .next_back()
+                .map(|c| c.is_alphanumeric() || c == '_')
+                .unwrap_or(false);
+            let arg_start = start + NEEDLE.len();
+            match code[arg_start..].find('"') {
+                Some(end_rel) => {
+                    if !prev_is_ident {
+                        out.insert(code[arg_start..arg_start + end_rel].to_string());
+                    }
+                    from = arg_start + end_rel + 1;
+                }
+                None => break,
+            }
+        }
+    }
+    out
+}
+
+/// Every deterministic fixture in the parity corpus must have a
+/// bit-equivalent `run_fixture(...)` replay call. Fails listing any
+/// deterministic fixture that is missing one.
+#[test]
+fn conformance_corpus_completeness() {
+    let dir = conformance_dir();
+    let mut fixtures = Vec::new();
+    collect_fixtures(&dir, &dir, &mut fixtures);
+    fixtures.sort();
+    assert!(
+        !fixtures.is_empty(),
+        "no fixtures discovered under {} — corpus path resolution is broken",
+        dir.display()
+    );
+
+    let covered = replayed_fixtures();
+
+    let mut missing = Vec::new();
+    for rel in &fixtures {
+        let path = dir.join(rel);
+        let bytes = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
+        let value: serde_json::Value = serde_json::from_str(&bytes)
+            .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()));
+        let schedule = value.get("schedule").unwrap_or(&serde_json::Value::Null);
+        if schedule_is_stochastic(schedule) {
+            // Stochastic fixtures are exempt (replayed under #[ignore]).
+            continue;
+        }
+        if !covered.contains(rel) {
+            missing.push(rel.clone());
+        }
+    }
+
+    assert!(
+        missing.is_empty(),
+        "deterministic conformance fixtures with no bit-equivalent \
+         run_fixture(...) replay call: {missing:?}\n\
+         Every deterministic fixture under {} must be replayed. Add a \
+         `run_fixture(\"<relative-path>\")` test for each (or, if a fixture \
+         is genuinely stochastic, ensure its schedule subtree carries a \
+         seeded VR/VI/RI/RR/VT/RT type so this guard treats it as exempt).",
+        dir.display()
+    );
 }

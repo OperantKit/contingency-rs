@@ -38,7 +38,7 @@ pub mod virtual_apparatus;
 pub mod serial_backend;
 
 pub use protocols::{Apparatus, ApparatusInfo, ApparatusStatus};
-pub use virtual_apparatus::{LoggedEvent, LogKind, LogPayload, VirtualApparatus};
+pub use virtual_apparatus::{LogKind, LogPayload, LoggedEvent, VirtualApparatus};
 
 use crate::errors::ContingencyError;
 

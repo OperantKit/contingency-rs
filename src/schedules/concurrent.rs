@@ -108,10 +108,7 @@ impl std::fmt::Debug for Concurrent {
             )
             .field(
                 "punish",
-                &self
-                    .punish
-                    .as_ref()
-                    .map(|m| m.keys().collect::<Vec<_>>()),
+                &self.punish.as_ref().map(|m| m.keys().collect::<Vec<_>>()),
             )
             .field("last_operandum", &self.last_operandum)
             .field("switch_time", &self.switch_time)
@@ -211,8 +208,7 @@ impl Concurrent {
             Some(map) => {
                 for key in map.keys() {
                     if !components.contains_key(key) {
-                        let mut known: Vec<&str> =
-                            components.keys().map(|s| s.as_str()).collect();
+                        let mut known: Vec<&str> = components.keys().map(|s| s.as_str()).collect();
                         known.sort_unstable();
                         return Err(ContingencyError::Config(format!(
                             "Concurrent punish references unknown operandum {key:?}; known operanda: {known:?}"
@@ -413,12 +409,9 @@ impl Schedule for Concurrent {
             }
         }
 
-        let cod_suppressed =
-            outcome.reinforced && from_event && self.cod_active(&operandum, now);
+        let cod_suppressed = outcome.reinforced && from_event && self.cod_active(&operandum, now);
         let base_fired = outcome.reinforced && from_event && !cod_suppressed;
-        let punisher_fired = punish_outcome
-            .as_ref()
-            .is_some_and(|p| p.reinforced);
+        let punisher_fired = punish_outcome.as_ref().is_some_and(|p| p.reinforced);
 
         if cod_suppressed && !punisher_fired {
             // Absorb the reinforcement: component advanced but subject
@@ -430,7 +423,12 @@ impl Schedule for Concurrent {
 
         if base_fired && punisher_fired {
             let b = outcome.reinforcer.as_ref().unwrap();
-            let p = punish_outcome.as_ref().unwrap().reinforcer.as_ref().unwrap();
+            let p = punish_outcome
+                .as_ref()
+                .unwrap()
+                .reinforcer
+                .as_ref()
+                .unwrap();
             let net = b.magnitude - p.magnitude;
             let label = if net > 0.0 {
                 "SR+"
@@ -460,7 +458,12 @@ impl Schedule for Concurrent {
         }
 
         if punisher_fired {
-            let p = punish_outcome.as_ref().unwrap().reinforcer.as_ref().unwrap();
+            let p = punish_outcome
+                .as_ref()
+                .unwrap()
+                .reinforcer
+                .as_ref()
+                .unwrap();
             let mut out = Outcome {
                 reinforced: true,
                 reinforcer: Some(Reinforcer {
@@ -1018,10 +1021,7 @@ mod tests {
         let out = sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
         assert!(out.reinforced);
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(true)));
-        assert_eq!(
-            out.meta.get("punisher_fired"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("punisher_fired"), Some(&MetaValue::Bool(true)));
         match out.meta.get("net_magnitude") {
             Some(MetaValue::Float(v)) => assert!(v.abs() < 1e-9),
             other => panic!("net_magnitude missing/wrong: {:?}", other),
@@ -1040,10 +1040,7 @@ mod tests {
         let mut sch = Concurrent::with_extensions(m, 0.0, 0, None, Some(p)).unwrap();
         let out = sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
         assert!(out.reinforced);
-        assert_eq!(
-            out.meta.get("punisher_fired"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("punisher_fired"), Some(&MetaValue::Bool(true)));
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(false)));
         let r = out.reinforcer.as_ref().unwrap();
         assert_eq!(r.label, "SR-");

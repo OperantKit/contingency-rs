@@ -138,10 +138,7 @@ mod tests {
                 assert_eq!(o.meta.get("second_order"), Some(&MetaValue::Bool(true)));
             } else if i % 2 == 0 {
                 // Every 2nd response is a unit completion.
-                assert_eq!(
-                    o.meta.get("unit_completed"),
-                    Some(&MetaValue::Bool(true))
-                );
+                assert_eq!(o.meta.get("unit_completed"), Some(&MetaValue::Bool(true)));
             }
         }
         assert_eq!(reinforced_at, Some(6.0));
@@ -159,10 +156,7 @@ mod tests {
             let o = respond(&mut s, i as f64);
             assert!(!o.reinforced);
             assert!(o.reinforcer.is_none());
-            assert_eq!(
-                o.meta.get("unit_completed"),
-                Some(&MetaValue::Bool(true))
-            );
+            assert_eq!(o.meta.get("unit_completed"), Some(&MetaValue::Bool(true)));
         }
         // 5th unit completion → overall reinforces.
         let o = respond(&mut s, 5.0);

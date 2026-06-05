@@ -162,8 +162,9 @@ impl<L: SerialLink> Apparatus for SerialApparatus<L> {
             let link = self.require_connected()?;
             match link.read(&mut chunk) {
                 Ok(n) => n,
-                Err(e) if e.kind() == std::io::ErrorKind::TimedOut
-                    || e.kind() == std::io::ErrorKind::WouldBlock =>
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::TimedOut
+                        || e.kind() == std::io::ErrorKind::WouldBlock =>
                 {
                     0
                 }
@@ -211,7 +212,10 @@ impl<L: SerialLink> Apparatus for SerialApparatus<L> {
         }
         let payload = format!("D {channel} {}\n", reinforcer.magnitude);
         let link = self.require_connected()?;
-        if let Err(e) = link.write_all(payload.as_bytes()).and_then(|_| link.flush()) {
+        if let Err(e) = link
+            .write_all(payload.as_bytes())
+            .and_then(|_| link.flush())
+        {
             let msg = e.to_string();
             self.status = ApparatusStatus {
                 connected: true,
@@ -234,7 +238,10 @@ impl<L: SerialLink> Apparatus for SerialApparatus<L> {
         }
         let payload = format!("S {stimulus} {}\n", if on { 1 } else { 0 });
         let link = self.require_connected()?;
-        if let Err(e) = link.write_all(payload.as_bytes()).and_then(|_| link.flush()) {
+        if let Err(e) = link
+            .write_all(payload.as_bytes())
+            .and_then(|_| link.flush())
+        {
             let msg = e.to_string();
             self.status = ApparatusStatus {
                 connected: true,

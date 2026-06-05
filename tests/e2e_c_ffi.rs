@@ -47,8 +47,16 @@ fn find_target_dir() -> Option<PathBuf> {
 /// contingency cdylib/staticlib. Prefer the profile matching
 /// `cfg!(debug_assertions)` but fall back to the other.
 fn find_lib_dir(target_dir: &Path) -> Option<PathBuf> {
-    let primary = if cfg!(debug_assertions) { "debug" } else { "release" };
-    let fallback = if cfg!(debug_assertions) { "release" } else { "debug" };
+    let primary = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let fallback = if cfg!(debug_assertions) {
+        "release"
+    } else {
+        "debug"
+    };
     for profile in [primary, fallback] {
         let d = target_dir.join(profile);
         if !d.is_dir() {
@@ -155,7 +163,10 @@ fn c_program_links_and_runs() {
     let header_dir = manifest.join("include");
     let header = header_dir.join("contingency.h");
     if !header.exists() {
-        eprintln!("e2e_c_ffi: skipped — header not found at {}", header.display());
+        eprintln!(
+            "e2e_c_ffi: skipped — header not found at {}",
+            header.display()
+        );
         return;
     }
 

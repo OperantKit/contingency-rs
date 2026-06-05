@@ -162,7 +162,8 @@ fn event_log_is_ordered() {
     let mut a = make();
     a.connect().unwrap();
     a.press("left", 1.0).unwrap();
-    a.deliver_reinforcer(2.0, &Reinforcer::at(2.0), "food").unwrap();
+    a.deliver_reinforcer(2.0, &Reinforcer::at(2.0), "food")
+        .unwrap();
     a.set_stimulus(3.0, "houselight", true).unwrap();
     let log = a.event_log();
     assert_eq!(log.len(), 3);
@@ -173,24 +174,14 @@ fn event_log_is_ordered() {
 
 #[test]
 fn empty_operanda_errors() {
-    let err = VirtualApparatus::new(
-        Vec::new(),
-        vec!["food".into()],
-        Vec::new(),
-        "x".into(),
-    )
-    .unwrap_err();
+    let err =
+        VirtualApparatus::new(Vec::new(), vec!["food".into()], Vec::new(), "x".into()).unwrap_err();
     assert!(matches!(err, ContingencyError::Hardware(_)));
 }
 
 #[test]
 fn empty_reinforcers_errors() {
-    let err = VirtualApparatus::new(
-        vec!["main".into()],
-        Vec::new(),
-        Vec::new(),
-        "x".into(),
-    )
-    .unwrap_err();
+    let err =
+        VirtualApparatus::new(vec!["main".into()], Vec::new(), Vec::new(), "x".into()).unwrap_err();
     assert!(matches!(err, ContingencyError::Hardware(_)));
 }

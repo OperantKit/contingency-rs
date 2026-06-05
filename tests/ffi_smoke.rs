@@ -156,8 +156,7 @@ fn concurrent_round_trips() {
     let comps: [*mut OpkSchedule; 2] = [a, b];
     // SAFETY: parallel arrays of length 2; components and strings are
     // valid for the duration of the call.
-    let handle =
-        unsafe { opk_concurrent(ops.as_ptr(), comps.as_ptr(), 2, 0.0, 0) };
+    let handle = unsafe { opk_concurrent(ops.as_ptr(), comps.as_ptr(), 2, 0.0, 0) };
     assert!(!handle.is_null());
     // SAFETY: live handle.
     unsafe { opk_schedule_free(handle) };

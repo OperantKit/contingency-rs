@@ -55,8 +55,16 @@ fn bindgen_bin_name() -> &'static str {
 }
 
 fn find_artifact(target_dir: &Path, name: &str) -> Option<PathBuf> {
-    let primary = if cfg!(debug_assertions) { "debug" } else { "release" };
-    let fallback = if cfg!(debug_assertions) { "release" } else { "debug" };
+    let primary = if cfg!(debug_assertions) {
+        "debug"
+    } else {
+        "release"
+    };
+    let fallback = if cfg!(debug_assertions) {
+        "release"
+    } else {
+        "debug"
+    };
     for profile in [primary, fallback] {
         let p = target_dir.join(profile).join(name);
         if p.exists() {

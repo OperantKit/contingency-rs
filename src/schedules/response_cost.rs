@@ -179,8 +179,7 @@ mod tests {
     #[test]
     fn finite_balance_decrements_per_response() {
         let mut s =
-            ResponseCost::new(Box::new(FR::new(1).unwrap()), 2.0, "tok".into(), Some(5.0))
-                .unwrap();
+            ResponseCost::new(Box::new(FR::new(1).unwrap()), 2.0, "tok".into(), Some(5.0)).unwrap();
         let o = respond(&mut s, 1.0);
         assert!(o.reinforced);
         assert_eq!(s.balance(), Some(3.0));
@@ -192,8 +191,7 @@ mod tests {
     #[test]
     fn insufficient_balance_drops_response() {
         let mut s =
-            ResponseCost::new(Box::new(FR::new(1).unwrap()), 3.0, "tok".into(), Some(5.0))
-                .unwrap();
+            ResponseCost::new(Box::new(FR::new(1).unwrap()), 3.0, "tok".into(), Some(5.0)).unwrap();
         // First response consumes 3 → balance 2 → reinforced.
         let o = respond(&mut s, 1.0);
         assert!(o.reinforced);
@@ -201,15 +199,17 @@ mod tests {
         // Second response cannot afford 3 → dropped, inner not stepped.
         let o = respond(&mut s, 2.0);
         assert!(!o.reinforced);
-        assert_eq!(o.meta.get("cost_insufficient"), Some(&MetaValue::Bool(true)));
+        assert_eq!(
+            o.meta.get("cost_insufficient"),
+            Some(&MetaValue::Bool(true))
+        );
         assert_eq!(s.balance(), Some(2.0));
     }
 
     #[test]
     fn tick_without_event_forwards_to_inner() {
         let mut s =
-            ResponseCost::new(Box::new(FR::new(1).unwrap()), 1.0, "tok".into(), Some(0.0))
-                .unwrap();
+            ResponseCost::new(Box::new(FR::new(1).unwrap()), 1.0, "tok".into(), Some(0.0)).unwrap();
         // Even with 0 balance, a pure tick should pass through.
         let o = s.step(1.0, None).unwrap();
         assert!(!o.reinforced);
@@ -219,8 +219,7 @@ mod tests {
     #[test]
     fn reset_restores_initial_balance() {
         let mut s =
-            ResponseCost::new(Box::new(FR::new(1).unwrap()), 1.0, "tok".into(), Some(3.0))
-                .unwrap();
+            ResponseCost::new(Box::new(FR::new(1).unwrap()), 1.0, "tok".into(), Some(3.0)).unwrap();
         respond(&mut s, 1.0);
         respond(&mut s, 2.0);
         assert_eq!(s.balance(), Some(1.0));

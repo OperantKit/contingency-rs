@@ -211,12 +211,9 @@ impl Schedule for AdjustingSchedule {
         match self.target {
             AdjustingTarget::Ratio => self.step_ratio(now, event),
             AdjustingTarget::Interval => self.step_interval(now, event),
-            AdjustingTarget::Delay | AdjustingTarget::Amount => {
-                Err(ContingencyError::Config(format!(
-                    "target={:?} runtime not yet implemented",
-                    self.target
-                )))
-            }
+            AdjustingTarget::Delay | AdjustingTarget::Amount => Err(ContingencyError::Config(
+                format!("target={:?} runtime not yet implemented", self.target),
+            )),
         }
     }
 
@@ -263,8 +260,7 @@ mod tests {
 
     #[test]
     fn ratio_increments_after_each_reinforcer() {
-        let mut s =
-            AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
+        let mut s = AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
         // Requirement=2: second response reinforces, current -> 3.
         assert!(!respond(&mut s, 1.0).reinforced);
         let o = respond(&mut s, 2.0);
@@ -302,14 +298,12 @@ mod tests {
 
     #[test]
     fn delay_and_amount_error_on_step() {
-        let mut d =
-            AdjustingSchedule::new(AdjustingTarget::Delay, 1.0, 1.0, None, None).unwrap();
+        let mut d = AdjustingSchedule::new(AdjustingTarget::Delay, 1.0, 1.0, None, None).unwrap();
         assert!(matches!(
             d.step(0.0, None),
             Err(ContingencyError::Config(_))
         ));
-        let mut a =
-            AdjustingSchedule::new(AdjustingTarget::Amount, 1.0, 1.0, None, None).unwrap();
+        let mut a = AdjustingSchedule::new(AdjustingTarget::Amount, 1.0, 1.0, None, None).unwrap();
         assert!(matches!(
             a.step(0.0, None),
             Err(ContingencyError::Config(_))
@@ -318,8 +312,7 @@ mod tests {
 
     #[test]
     fn reset_restores_current_and_counter() {
-        let mut s =
-            AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
+        let mut s = AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
         respond(&mut s, 1.0);
         respond(&mut s, 2.0);
         assert_eq!(s.current_value(), 3.0);
@@ -329,8 +322,7 @@ mod tests {
 
     #[test]
     fn rejects_non_monotonic_time() {
-        let mut s =
-            AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
+        let mut s = AdjustingSchedule::new(AdjustingTarget::Ratio, 2.0, 1.0, None, None).unwrap();
         respond(&mut s, 5.0);
         let ev = ResponseEvent::new(4.0);
         assert!(matches!(

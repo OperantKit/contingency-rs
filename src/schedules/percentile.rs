@@ -281,10 +281,7 @@ mod tests {
         // Now window = [1,1,1]. Next IRT = 5.
         let o = respond(&mut s, 8.0);
         assert!(o.reinforced);
-        assert_eq!(
-            o.meta.get("percentile_rank"),
-            Some(&MetaValue::Int(50))
-        );
+        assert_eq!(o.meta.get("percentile_rank"), Some(&MetaValue::Int(50)));
     }
 
     #[test]

@@ -166,11 +166,7 @@ impl JsSchedule {
     // ------------------------------------------------------------------
 
     /// Advance the schedule to ``now`` and optionally deliver a response.
-    pub fn step(
-        &mut self,
-        now: f64,
-        event: Option<JsResponseEvent>,
-    ) -> Result<JsOutcome, JsValue> {
+    pub fn step(&mut self, now: f64, event: Option<JsResponseEvent>) -> Result<JsOutcome, JsValue> {
         let ev = event.as_ref().map(|e| e.inner.clone());
         let out = self.inner.step(now, ev.as_ref()).map_err(err_to_js)?;
         Ok(JsOutcome { inner: out })
@@ -424,10 +420,9 @@ impl JsSchedule {
             IndexMap::with_capacity(components.len());
         for (key, c) in operanda.into_iter().zip(components) {
             if map.insert(key.clone(), c.inner).is_some() {
-                return Err(JsError::new(&format!(
-                    "concurrent: duplicate operandum key {key:?}"
-                ))
-                .into());
+                return Err(
+                    JsError::new(&format!("concurrent: duplicate operandum key {key:?}")).into(),
+                );
             }
         }
         Ok(Self::from_box(Box::new(

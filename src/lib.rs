@@ -11,10 +11,10 @@ pub mod builder;
 pub mod constants;
 pub mod errors;
 pub mod helpers;
+pub mod hw;
 pub mod schedule;
 pub mod schedules;
 pub mod types;
-pub mod hw;
 
 pub use builder::ScheduleBuilder;
 

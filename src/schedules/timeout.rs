@@ -58,11 +58,7 @@ impl Timeout {
     /// # Errors
     ///
     /// Returns [`ContingencyError::Config`] if `duration <= 0` or not finite.
-    pub fn new(
-        inner: Box<dyn Schedule>,
-        duration: f64,
-        reset_on_response: bool,
-    ) -> Result<Self> {
+    pub fn new(inner: Box<dyn Schedule>, duration: f64, reset_on_response: bool) -> Result<Self> {
         if !duration.is_finite() || duration <= 0.0 {
             return Err(ContingencyError::Config(format!(
                 "Timeout requires duration > 0, got {duration}"

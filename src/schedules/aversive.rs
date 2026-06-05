@@ -140,10 +140,8 @@ impl Schedule for Sidman {
                 magnitude: -self.magnitude,
                 label: "SR-".into(),
             });
-            out.meta.insert(
-                "aversive_event".into(),
-                MetaValue::Str("shock".into()),
-            );
+            out.meta
+                .insert("aversive_event".into(), MetaValue::Str("shock".into()));
             return Ok(out);
         }
         Ok(Outcome::empty())
@@ -251,10 +249,8 @@ impl Schedule for DiscriminatedAvoidance {
                 let mut out = Outcome::empty();
                 out.meta
                     .insert("phase".into(), MetaValue::Str("warning".into()));
-                out.meta.insert(
-                    "aversive_event".into(),
-                    MetaValue::Str("avoidance".into()),
-                );
+                out.meta
+                    .insert("aversive_event".into(), MetaValue::Str("avoidance".into()));
                 out.meta
                     .insert("trial_outcome".into(), MetaValue::Str("avoid".into()));
                 return Ok(out);
@@ -398,10 +394,8 @@ impl Schedule for Escape {
                     "aversive_event".into(),
                     MetaValue::Str("shock_termination".into()),
                 );
-                out.meta.insert(
-                    "trial_outcome".into(),
-                    MetaValue::Str("escape".into()),
-                );
+                out.meta
+                    .insert("trial_outcome".into(), MetaValue::Str("escape".into()));
                 return Ok(out);
             }
             if now + TIME_TOL >= self.phase_end {
@@ -411,14 +405,10 @@ impl Schedule for Escape {
                 let mut out = Outcome::empty();
                 out.meta
                     .insert("phase".into(), MetaValue::Str("shock".into()));
-                out.meta.insert(
-                    "aversive_event".into(),
-                    MetaValue::Str("trial_end".into()),
-                );
-                out.meta.insert(
-                    "trial_outcome".into(),
-                    MetaValue::Str("failed".into()),
-                );
+                out.meta
+                    .insert("aversive_event".into(), MetaValue::Str("trial_end".into()));
+                out.meta
+                    .insert("trial_outcome".into(), MetaValue::Str("failed".into()));
                 return Ok(out);
             }
             let is_onset = !self.shock_onset_emitted;
@@ -585,10 +575,7 @@ mod tests {
         let mut d = DiscriminatedAvoidance::new(5.0, 10.0, 1.0).unwrap();
         let o = d.step(2.0, None).unwrap();
         assert!(!o.reinforced);
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("iti".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("iti".into())));
     }
 
     #[test]
@@ -655,10 +642,7 @@ mod tests {
         d.reset();
         assert_eq!(d.phase(), "iti");
         let o = d.step(2.0, None).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("iti".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("iti".into())));
     }
 
     #[test]
@@ -695,10 +679,7 @@ mod tests {
             o.meta.get("aversive_event"),
             Some(&MetaValue::Str("shock_onset".into()))
         );
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("shock".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("shock".into())));
     }
 
     #[test]
@@ -766,10 +747,7 @@ mod tests {
         let r = ev(1.0);
         e.step(1.0, Some(&r)).unwrap();
         let o_iti = e.step(3.0, None).unwrap();
-        assert_eq!(
-            o_iti.meta.get("phase"),
-            Some(&MetaValue::Str("iti".into()))
-        );
+        assert_eq!(o_iti.meta.get("phase"), Some(&MetaValue::Str("iti".into())));
         assert!(!o_iti.reinforced);
         let o_new = e.step(4.0, None).unwrap();
         assert!(o_new.reinforced);

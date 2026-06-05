@@ -164,11 +164,7 @@ mod tests {
     }
 
     impl Schedule for OneShotSchedule {
-        fn step(
-            &mut self,
-            now: f64,
-            event: Option<&ResponseEvent>,
-        ) -> Result<Outcome> {
+        fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome> {
             check_time(now, self.last_now)?;
             check_event(now, event)?;
             self.last_now = Some(now);
@@ -207,11 +203,8 @@ mod tests {
 
     #[test]
     fn neither_fires_returns_empty_outcome() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(5).unwrap()),
-            Box::new(FR::new(5).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(5).unwrap()), Box::new(FR::new(5).unwrap())).unwrap();
         let out = ov.step(0.0, Some(&ev(0.0))).unwrap();
         assert!(!out.reinforced);
         assert!(out.reinforcer.is_none());
@@ -240,10 +233,7 @@ mod tests {
         let r = out.reinforcer.as_ref().unwrap();
         assert!((r.magnitude - (-1.0)).abs() < 1e-9);
         assert_eq!(r.label, "SR-");
-        assert_eq!(
-            out.meta.get("punisher_fired"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("punisher_fired"), Some(&MetaValue::Bool(true)));
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(false)));
     }
 
@@ -257,10 +247,7 @@ mod tests {
         let out = ov.step(0.0, Some(&ev(0.0))).unwrap();
         assert!(out.reinforced);
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(true)));
-        assert_eq!(
-            out.meta.get("punisher_fired"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("punisher_fired"), Some(&MetaValue::Bool(true)));
         match out.meta.get("net_magnitude") {
             Some(MetaValue::Float(v)) => assert!((*v - 0.7).abs() < 1e-9),
             other => panic!("net_magnitude missing/wrong: {:?}", other),
@@ -300,22 +287,16 @@ mod tests {
 
     #[test]
     fn tick_without_event_returns_no_reinforcement_for_ratio() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(2).unwrap()),
-            Box::new(FR::new(3).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(2).unwrap()), Box::new(FR::new(3).unwrap())).unwrap();
         let out = ov.step(5.0, None).unwrap();
         assert!(!out.reinforced);
     }
 
     #[test]
     fn non_monotonic_time_raises() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(2).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(1).unwrap()), Box::new(FR::new(2).unwrap())).unwrap();
         ov.step(1.0, Some(&ev(1.0))).unwrap();
         let err = ov.step(0.5, Some(&ev(0.5))).unwrap_err();
         assert!(matches!(err, ContingencyError::State(_)));
@@ -323,11 +304,8 @@ mod tests {
 
     #[test]
     fn event_time_mismatch_raises() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(1).unwrap()),
-            Box::new(FR::new(2).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(1).unwrap()), Box::new(FR::new(2).unwrap())).unwrap();
         let bad = ResponseEvent::new(0.9);
         let err = ov.step(1.0, Some(&bad)).unwrap_err();
         assert!(matches!(err, ContingencyError::State(_)));
@@ -335,11 +313,8 @@ mod tests {
 
     #[test]
     fn reset_clears_both_components() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(2).unwrap()),
-            Box::new(FR::new(2).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(2).unwrap()), Box::new(FR::new(2).unwrap())).unwrap();
         ov.step(0.0, Some(&ev(0.0))).unwrap();
         ov.reset();
         let out = ov.step(1.0, Some(&ev(1.0))).unwrap();
@@ -348,8 +323,7 @@ mod tests {
 
     #[test]
     fn sequence_fr_base_only_pattern() {
-        let mut ov =
-            Overlay::new(Box::new(FR::new(3).unwrap()), Box::new(EXT::new())).unwrap();
+        let mut ov = Overlay::new(Box::new(FR::new(3).unwrap()), Box::new(EXT::new())).unwrap();
         for t in [1.0, 2.0] {
             assert!(!ov.step(t, Some(&ev(t))).unwrap().reinforced);
         }
@@ -360,8 +334,7 @@ mod tests {
 
     #[test]
     fn sequence_fr_punisher_only_pattern() {
-        let mut ov =
-            Overlay::new(Box::new(EXT::new()), Box::new(FR::new(3).unwrap())).unwrap();
+        let mut ov = Overlay::new(Box::new(EXT::new()), Box::new(FR::new(3).unwrap())).unwrap();
         for t in [1.0, 2.0] {
             assert!(!ov.step(t, Some(&ev(t))).unwrap().reinforced);
         }
@@ -372,21 +345,15 @@ mod tests {
 
     #[test]
     fn repeated_cycles_alternate_correctly() {
-        let mut ov = Overlay::new(
-            Box::new(FR::new(2).unwrap()),
-            Box::new(FR::new(3).unwrap()),
-        )
-        .unwrap();
+        let mut ov =
+            Overlay::new(Box::new(FR::new(2).unwrap()), Box::new(FR::new(3).unwrap())).unwrap();
         ov.step(1.0, Some(&ev(1.0))).unwrap();
         let out = ov.step(2.0, Some(&ev(2.0))).unwrap();
         assert!(out.reinforced);
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(true)));
         let out = ov.step(3.0, Some(&ev(3.0))).unwrap();
         assert!(out.reinforced);
-        assert_eq!(
-            out.meta.get("punisher_fired"),
-            Some(&MetaValue::Bool(true))
-        );
+        assert_eq!(out.meta.get("punisher_fired"), Some(&MetaValue::Bool(true)));
         assert_eq!(out.meta.get("base_fired"), Some(&MetaValue::Bool(false)));
     }
 }

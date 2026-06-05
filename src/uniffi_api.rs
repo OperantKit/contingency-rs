@@ -258,10 +258,7 @@ impl UniffiSchedule {
 
     /// Random Ratio.
     #[uniffi::constructor]
-    pub fn rr(
-        probability: f64,
-        seed: Option<u64>,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn rr(probability: f64, seed: Option<u64>) -> Result<Arc<Self>, UniffiContingencyError> {
         Ok(Self::wrap(schedules::RR::new(probability, seed)?))
     }
 
@@ -289,10 +286,7 @@ impl UniffiSchedule {
 
     /// Random Interval.
     #[uniffi::constructor]
-    pub fn ri(
-        mean_interval: f64,
-        seed: Option<u64>,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn ri(mean_interval: f64, seed: Option<u64>) -> Result<Arc<Self>, UniffiContingencyError> {
         Ok(Self::wrap(schedules::RI::new(mean_interval, seed)?))
     }
 
@@ -305,10 +299,7 @@ impl UniffiSchedule {
 
     /// Fixed-Interval with Limited Hold.
     #[uniffi::constructor]
-    pub fn limited_hold_fi(
-        interval: f64,
-        hold: f64,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn limited_hold_fi(interval: f64, hold: f64) -> Result<Arc<Self>, UniffiContingencyError> {
         let inner: SendableArmable = Box::new(schedules::FI::new(interval)?);
         Ok(Self::wrap(LimitedHold::new(inner, hold)?))
     }
@@ -321,8 +312,11 @@ impl UniffiSchedule {
         hold: f64,
         seed: Option<u64>,
     ) -> Result<Arc<Self>, UniffiContingencyError> {
-        let inner: SendableArmable =
-            Box::new(schedules::VI::new(mean_interval, n_intervals as usize, seed)?);
+        let inner: SendableArmable = Box::new(schedules::VI::new(
+            mean_interval,
+            n_intervals as usize,
+            seed,
+        )?);
         Ok(Self::wrap(LimitedHold::new(inner, hold)?))
     }
 
@@ -361,10 +355,7 @@ impl UniffiSchedule {
 
     /// Random Time.
     #[uniffi::constructor]
-    pub fn rt(
-        mean_interval: f64,
-        seed: Option<u64>,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn rt(mean_interval: f64, seed: Option<u64>) -> Result<Arc<Self>, UniffiContingencyError> {
         Ok(Self::wrap(schedules::RT::new(mean_interval, seed)?))
     }
 
@@ -402,11 +393,11 @@ impl UniffiSchedule {
 
     /// Differential Reinforcement of High rates.
     #[uniffi::constructor]
-    pub fn drh(
-        response_count: u32,
-        time_window: f64,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
-        Ok(Self::wrap(schedules::DRH::new(response_count, time_window)?))
+    pub fn drh(response_count: u32, time_window: f64) -> Result<Arc<Self>, UniffiContingencyError> {
+        Ok(Self::wrap(schedules::DRH::new(
+            response_count,
+            time_window,
+        )?))
     }
 
     // ---- Progressive Ratio ---------------------------------------------
@@ -414,10 +405,7 @@ impl UniffiSchedule {
     /// Progressive Ratio with an arithmetic step function
     /// (`r_n = start + n * step`).
     #[uniffi::constructor]
-    pub fn pr_arithmetic(
-        start: u32,
-        step: u32,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn pr_arithmetic(start: u32, step: u32) -> Result<Arc<Self>, UniffiContingencyError> {
         let step_fn = schedules::arithmetic(start, step)?;
         Ok(Self::wrap(ProgressiveRatio::new(step_fn)))
     }
@@ -425,10 +413,7 @@ impl UniffiSchedule {
     /// Progressive Ratio with a geometric step function
     /// (`r_n = round(start * ratio.powi(n))`).
     #[uniffi::constructor]
-    pub fn pr_geometric(
-        start: u32,
-        ratio: f64,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn pr_geometric(start: u32, ratio: f64) -> Result<Arc<Self>, UniffiContingencyError> {
         let step_fn = schedules::geometric(start, ratio)?;
         Ok(Self::wrap(ProgressiveRatio::new(step_fn)))
     }
@@ -488,9 +473,7 @@ impl UniffiSchedule {
     /// `meta["current_component"]` on each `Outcome` is reported as an
     /// integer link index rather than a string.
     #[uniffi::constructor]
-    pub fn tandem(
-        components: Vec<Arc<Self>>,
-    ) -> Result<Arc<Self>, UniffiContingencyError> {
+    pub fn tandem(components: Vec<Arc<Self>>) -> Result<Arc<Self>, UniffiContingencyError> {
         let inner: Vec<SendableSchedule> = components.iter().map(Self::take_inner).collect();
         Ok(Self::wrap(schedules::Tandem::new(inner)?))
     }

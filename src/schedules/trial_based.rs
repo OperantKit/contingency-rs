@@ -245,10 +245,7 @@ impl MatchingToSample {
             "trial_index".into(),
             MetaValue::Int(self.trial_index as i64),
         );
-        meta.insert(
-            "trial_outcome".into(),
-            MetaValue::Str("incorrect".into()),
-        );
+        meta.insert("trial_outcome".into(), MetaValue::Str("incorrect".into()));
         Ok(Outcome {
             reinforced: sub.reinforced,
             reinforcer: sub.reinforcer,
@@ -276,10 +273,7 @@ impl MatchingToSample {
                 "trial_index".into(),
                 MetaValue::Int(self.trial_index as i64),
             );
-            meta.insert(
-                "trial_outcome".into(),
-                MetaValue::Str(label.into()),
-            );
+            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
             return Ok(Outcome {
                 reinforced: true,
                 reinforcer: Some(Reinforcer::at(now)),
@@ -293,10 +287,7 @@ impl MatchingToSample {
                 "trial_index".into(),
                 MetaValue::Int(self.trial_index as i64),
             );
-            meta.insert(
-                "trial_outcome".into(),
-                MetaValue::Str(label.into()),
-            );
+            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
             return Ok(Outcome {
                 reinforced: false,
                 reinforcer: None,
@@ -310,10 +301,7 @@ impl MatchingToSample {
             "trial_index".into(),
             MetaValue::Int(self.trial_index as i64),
         );
-        meta.insert(
-            "trial_outcome".into(),
-            MetaValue::Str(label.into()),
-        );
+        meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
         Ok(Outcome {
             reinforced: sub.reinforced,
             reinforcer: sub.reinforcer,
@@ -346,10 +334,7 @@ impl Schedule for MatchingToSample {
                     let started = self.phase_started.unwrap();
                     if now - started > self.choice_timeout + TIME_TOL {
                         // Timeout scored incorrect.
-                        self.enter_iti(
-                            started + self.choice_timeout,
-                            "incorrect",
-                        );
+                        self.enter_iti(started + self.choice_timeout, "incorrect");
                         return self.incorrect_timeout_outcome(now);
                     }
                 }
@@ -579,18 +564,12 @@ impl GoNoGo {
 
         if is_go && target_slot.is_none() {
             let mut meta = std::collections::BTreeMap::new();
-            meta.insert(
-                "phase".into(),
-                MetaValue::Str(phase_snapshot.into()),
-            );
+            meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
             meta.insert(
                 "trial_index".into(),
                 MetaValue::Int(self.trial_index as i64),
             );
-            meta.insert(
-                "trial_outcome".into(),
-                MetaValue::Str(label.into()),
-            );
+            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
             return Ok(Outcome {
                 reinforced: true,
                 reinforcer: Some(Reinforcer::at(now)),
@@ -599,18 +578,12 @@ impl GoNoGo {
         }
         if target_slot.is_none() {
             let mut meta = std::collections::BTreeMap::new();
-            meta.insert(
-                "phase".into(),
-                MetaValue::Str(phase_snapshot.into()),
-            );
+            meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
             meta.insert(
                 "trial_index".into(),
                 MetaValue::Int(self.trial_index as i64),
             );
-            meta.insert(
-                "trial_outcome".into(),
-                MetaValue::Str(label.into()),
-            );
+            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
             return Ok(Outcome {
                 reinforced: false,
                 reinforcer: None,
@@ -619,10 +592,7 @@ impl GoNoGo {
         }
         let sub = target_slot.as_mut().unwrap().step(now, Some(event))?;
         let mut meta = std::collections::BTreeMap::new();
-        meta.insert(
-            "phase".into(),
-            MetaValue::Str(phase_snapshot.into()),
-        );
+        meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
         meta.insert(
             "trial_index".into(),
             MetaValue::Int(self.trial_index as i64),
@@ -662,14 +632,8 @@ impl Schedule for GoNoGo {
                                 let sub = sched.step(boundary, None)?;
                                 let trial_idx = self.trial_index;
                                 let mut meta = std::collections::BTreeMap::new();
-                                meta.insert(
-                                    "phase".into(),
-                                    MetaValue::Str("nogo".into()),
-                                );
-                                meta.insert(
-                                    "trial_index".into(),
-                                    MetaValue::Int(trial_idx as i64),
-                                );
+                                meta.insert("phase".into(), MetaValue::Str("nogo".into()));
+                                meta.insert("trial_index".into(), MetaValue::Int(trial_idx as i64));
                                 meta.insert(
                                     "trial_outcome".into(),
                                     MetaValue::Str("correct_withhold".into()),
@@ -816,10 +780,7 @@ mod tests {
         let correct = mts.correct_operandum().to_string();
         let r = ev(&correct, 0.1);
         let o = mts.step(0.1, Some(&r)).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("sample".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("sample".into())));
         assert!(!o.reinforced);
         assert!(!o.meta.contains_key("trial_outcome"));
     }
@@ -829,18 +790,14 @@ mod tests {
         let mut mts = MatchingToSample::new(2, 1.0, 2.0, None, None, 1.0, Some(1)).unwrap();
         mts.step(0.0, None).unwrap();
         let o = mts.step(1.5, None).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("choice".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("choice".into())));
     }
 
     // ---- MTS choice phase ------------------------------------------------
 
     #[test]
     fn mts_correct_choice_defaults_to_crf() {
-        let mut mts =
-            MatchingToSample::new(3, 0.0, 5.0, None, None, 1.0, Some(123)).unwrap();
+        let mut mts = MatchingToSample::new(3, 0.0, 5.0, None, None, 1.0, Some(123)).unwrap();
         let correct = mts.correct_operandum().to_string();
         let r = ev(&correct, 0.0);
         let o = mts.step(0.0, Some(&r)).unwrap();
@@ -854,8 +811,7 @@ mod tests {
 
     #[test]
     fn mts_incorrect_choice_no_consequence() {
-        let mut mts =
-            MatchingToSample::new(3, 0.0, 5.0, None, None, 1.0, Some(123)).unwrap();
+        let mut mts = MatchingToSample::new(3, 0.0, 5.0, None, None, 1.0, Some(123)).unwrap();
         let correct = mts.correct_operandum().to_string();
         let other = (0..3)
             .map(|i| format!("choice_{i}"))
@@ -873,16 +829,8 @@ mod tests {
     #[test]
     fn mts_consequence_schedule_passthrough() {
         let consequence: Box<dyn Schedule> = Box::new(FR::new(1).unwrap());
-        let mut mts = MatchingToSample::new(
-            2,
-            0.0,
-            5.0,
-            Some(consequence),
-            None,
-            1.0,
-            Some(42),
-        )
-        .unwrap();
+        let mut mts =
+            MatchingToSample::new(2, 0.0, 5.0, Some(consequence), None, 1.0, Some(42)).unwrap();
         let correct = mts.correct_operandum().to_string();
         let r = ev(&correct, 0.0);
         let o = mts.step(0.0, Some(&r)).unwrap();
@@ -895,8 +843,7 @@ mod tests {
 
     #[test]
     fn mts_choice_timeout_scored_incorrect() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 3.0, None, None, 1.0, Some(1)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 3.0, None, None, 1.0, Some(1)).unwrap();
         mts.step(0.0, None).unwrap();
         let o = mts.step(3.5, None).unwrap();
         assert_eq!(
@@ -908,16 +855,8 @@ mod tests {
     #[test]
     fn mts_timeout_with_incorrect_schedule() {
         let incorrect: Box<dyn Schedule> = Box::new(FT::new(1.0).unwrap());
-        let mut mts = MatchingToSample::new(
-            2,
-            0.0,
-            1.0,
-            None,
-            Some(incorrect),
-            1.0,
-            Some(1),
-        )
-        .unwrap();
+        let mut mts =
+            MatchingToSample::new(2, 0.0, 1.0, None, Some(incorrect), 1.0, Some(1)).unwrap();
         mts.step(0.0, None).unwrap();
         let o = mts.step(2.0, None).unwrap();
         assert_eq!(
@@ -930,39 +869,28 @@ mod tests {
 
     #[test]
     fn mts_iti_transitions_to_next_trial() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
         let correct = mts.correct_operandum().to_string();
         let r = ev(&correct, 0.0);
         mts.step(0.0, Some(&r)).unwrap();
         // ITI: response ignored.
         let r2 = ev("choice_0", 0.5);
         let o = mts.step(0.5, Some(&r2)).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("iti".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("iti".into())));
         let o = mts.step(1.2, None).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("choice".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("choice".into())));
         assert_eq!(mts.trial_index(), 1);
     }
 
     #[test]
     fn mts_iti_response_ignored() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 5.0, None, None, 2.0, Some(1)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 2.0, Some(1)).unwrap();
         let correct = mts.correct_operandum().to_string();
         let r = ev(&correct, 0.0);
         mts.step(0.0, Some(&r)).unwrap();
         let r2 = ev("choice_0", 0.5);
         let o = mts.step(0.5, Some(&r2)).unwrap();
-        assert_eq!(
-            o.meta.get("phase"),
-            Some(&MetaValue::Str("iti".into()))
-        );
+        assert_eq!(o.meta.get("phase"), Some(&MetaValue::Str("iti".into())));
         assert!(!o.reinforced);
     }
 
@@ -977,8 +905,7 @@ mod tests {
 
     #[test]
     fn mts_reset_returns_to_trial_zero() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(3)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(3)).unwrap();
         let original = mts.correct_operandum().to_string();
         let r = ev(&original, 0.0);
         mts.step(0.0, Some(&r)).unwrap();
@@ -993,16 +920,14 @@ mod tests {
 
     #[test]
     fn mts_non_monotonic_rejected() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
         mts.step(1.0, None).unwrap();
         assert!(mts.step(0.5, None).is_err());
     }
 
     #[test]
     fn mts_event_time_mismatch_rejected() {
-        let mut mts =
-            MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
         let r = ev("choice_0", 2.0);
         assert!(mts.step(1.0, Some(&r)).is_err());
     }
@@ -1030,8 +955,7 @@ mod tests {
     #[test]
     fn gonogo_go_response_default_crf() {
         let seed = find_go_seed();
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
         assert!(g.current_is_go());
         let r = main_ev(0.5);
         let o = g.step(0.5, Some(&r)).unwrap();
@@ -1045,8 +969,7 @@ mod tests {
     #[test]
     fn gonogo_go_no_response_miss() {
         let seed = find_go_seed();
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
         g.step(0.0, None).unwrap();
         let o = g.step(2.5, None).unwrap();
         assert!(!o.reinforced);
@@ -1061,8 +984,7 @@ mod tests {
     #[test]
     fn gonogo_nogo_response_is_false_alarm() {
         let seed = find_nogo_seed();
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
         let r = main_ev(0.5);
         let o = g.step(0.5, Some(&r)).unwrap();
         assert!(!o.reinforced);
@@ -1085,8 +1007,7 @@ mod tests {
         }
         let seed = seed.expect("no nogo seed");
         let fa: Box<dyn Schedule> = Box::new(FR::new(1).unwrap());
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, Some(fa), Some(seed)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, Some(fa), Some(seed)).unwrap();
         let r = main_ev(0.5);
         let o = g.step(0.5, Some(&r)).unwrap();
         assert!(o.reinforced);
@@ -1099,8 +1020,7 @@ mod tests {
     #[test]
     fn gonogo_nogo_withhold_label() {
         let seed = find_nogo_seed();
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(seed)).unwrap();
         g.step(0.0, None).unwrap();
         let o = g.step(2.5, None).unwrap();
         assert_eq!(
@@ -1117,8 +1037,7 @@ mod tests {
         let trials = 2000u32;
         let p = 0.7f64;
         let mut go_count = 0u32;
-        let mut g =
-            GoNoGo::new(p, 1.0, 0.0, None, None, None, Some(42)).unwrap();
+        let mut g = GoNoGo::new(p, 1.0, 0.0, None, None, None, Some(42)).unwrap();
         let mut now = 0.0;
         for _ in 0..trials {
             if g.current_is_go() {
@@ -1140,8 +1059,7 @@ mod tests {
 
     #[test]
     fn gonogo_reset_returns_to_trial_zero() {
-        let mut g =
-            GoNoGo::new(0.5, 1.0, 0.5, None, None, None, Some(3)).unwrap();
+        let mut g = GoNoGo::new(0.5, 1.0, 0.5, None, None, None, Some(3)).unwrap();
         g.step(0.0, None).unwrap();
         g.step(2.0, None).unwrap();
         assert!(g.trial_index() >= 1);
@@ -1151,8 +1069,7 @@ mod tests {
 
     #[test]
     fn gonogo_non_monotonic_rejected() {
-        let mut g =
-            GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(1)).unwrap();
+        let mut g = GoNoGo::new(0.5, 2.0, 1.0, None, None, None, Some(1)).unwrap();
         g.step(1.0, None).unwrap();
         assert!(g.step(0.5, None).is_err());
     }

@@ -183,10 +183,7 @@ impl ScheduleBuilder {
     // ------------------------------------------------------------------
 
     /// Alternative (whichever-first) compound schedule.
-    pub fn alternative(
-        first: Box<dyn Schedule>,
-        second: Box<dyn Schedule>,
-    ) -> Box<dyn Schedule> {
+    pub fn alternative(first: Box<dyn Schedule>, second: Box<dyn Schedule>) -> Box<dyn Schedule> {
         Box::new(schedules::Alternative::new(first, second))
     }
 
@@ -233,9 +230,21 @@ mod tests {
     #[test]
     fn fr_builds_and_fires_on_nth() {
         let mut s = ScheduleBuilder::fr(3).unwrap();
-        assert!(!step_reinforced(&mut *s, 1.0, Some(&ResponseEvent::new(1.0))));
-        assert!(!step_reinforced(&mut *s, 2.0, Some(&ResponseEvent::new(2.0))));
-        assert!(step_reinforced(&mut *s, 3.0, Some(&ResponseEvent::new(3.0))));
+        assert!(!step_reinforced(
+            &mut *s,
+            1.0,
+            Some(&ResponseEvent::new(1.0))
+        ));
+        assert!(!step_reinforced(
+            &mut *s,
+            2.0,
+            Some(&ResponseEvent::new(2.0))
+        ));
+        assert!(step_reinforced(
+            &mut *s,
+            3.0,
+            Some(&ResponseEvent::new(3.0))
+        ));
     }
 
     #[test]
@@ -246,8 +255,16 @@ mod tests {
     #[test]
     fn crf_fires_every_response() {
         let mut s = ScheduleBuilder::crf();
-        assert!(step_reinforced(&mut *s, 1.0, Some(&ResponseEvent::new(1.0))));
-        assert!(step_reinforced(&mut *s, 2.0, Some(&ResponseEvent::new(2.0))));
+        assert!(step_reinforced(
+            &mut *s,
+            1.0,
+            Some(&ResponseEvent::new(1.0))
+        ));
+        assert!(step_reinforced(
+            &mut *s,
+            2.0,
+            Some(&ResponseEvent::new(2.0))
+        ));
     }
 
     #[test]
@@ -284,8 +301,16 @@ mod tests {
     #[test]
     fn fi_builds_and_fires_after_interval() {
         let mut s = ScheduleBuilder::fi(2.0).unwrap();
-        assert!(!step_reinforced(&mut *s, 1.0, Some(&ResponseEvent::new(1.0))));
-        assert!(step_reinforced(&mut *s, 2.5, Some(&ResponseEvent::new(2.5))));
+        assert!(!step_reinforced(
+            &mut *s,
+            1.0,
+            Some(&ResponseEvent::new(1.0))
+        ));
+        assert!(step_reinforced(
+            &mut *s,
+            2.5,
+            Some(&ResponseEvent::new(2.5))
+        ));
     }
 
     #[test]
@@ -304,7 +329,11 @@ mod tests {
     fn limited_hold_fi_builds() {
         let mut s = ScheduleBuilder::limited_hold_fi(2.0, 0.5).unwrap();
         // Response well after (interval + hold) misses the window.
-        assert!(!step_reinforced(&mut *s, 5.0, Some(&ResponseEvent::new(5.0))));
+        assert!(!step_reinforced(
+            &mut *s,
+            5.0,
+            Some(&ResponseEvent::new(5.0))
+        ));
     }
 
     #[test]
@@ -365,9 +394,17 @@ mod tests {
     fn drl_builds() {
         let mut s = ScheduleBuilder::drl(2.0).unwrap();
         // first response reinforces
-        assert!(step_reinforced(&mut *s, 1.0, Some(&ResponseEvent::new(1.0))));
+        assert!(step_reinforced(
+            &mut *s,
+            1.0,
+            Some(&ResponseEvent::new(1.0))
+        ));
         // within-interval does not
-        assert!(!step_reinforced(&mut *s, 1.5, Some(&ResponseEvent::new(1.5))));
+        assert!(!step_reinforced(
+            &mut *s,
+            1.5,
+            Some(&ResponseEvent::new(1.5))
+        ));
     }
 
     #[test]
@@ -400,8 +437,16 @@ mod tests {
         let b = ScheduleBuilder::fr(5).unwrap();
         let mut s = ScheduleBuilder::alternative(a, b);
         // First component (FR 2) fires first on response 2.
-        assert!(!step_reinforced(&mut *s, 1.0, Some(&ResponseEvent::new(1.0))));
-        assert!(step_reinforced(&mut *s, 2.0, Some(&ResponseEvent::new(2.0))));
+        assert!(!step_reinforced(
+            &mut *s,
+            1.0,
+            Some(&ResponseEvent::new(1.0))
+        ));
+        assert!(step_reinforced(
+            &mut *s,
+            2.0,
+            Some(&ResponseEvent::new(2.0))
+        ));
     }
 
     #[test]
