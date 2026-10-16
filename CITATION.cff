@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+title: "contingency-rs"
+authors:
+  - name: "OperantKit contributors"
+repository-code: "https://github.com/OperantKit/contingency-rs"
+license: MIT
+abstract: "Reinforcement contingency engine — Rust port of contingency-py. Mirrors the executable specification defined by the Python package and its conformance fixtures."
