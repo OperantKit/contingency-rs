@@ -1,0 +1,49 @@
+# contingency (contingency-rs)
+
+> Rust reinforcement schedule engine: FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT, limited hold, DRO/DRL/DRH, progressive ratio, and compound schedules (concurrent with COD and FRCO, multiple, chained, tandem, alternative) as deterministic, testable state machines, with C, Python (PyO3), WebAssembly, and Swift/Kotlin (UniFFI) bindings.
+
+contingency-rs is part of OperantKit, a set of Python/Rust packages for designing and running operant and respondent conditioning experiments (reinforcement schedules, session recording, analysis). Use it instead of hand-writing schedule logic: variable schedules use the Fleshler-Hoffman (1962) progression with an explicit seed, concurrent schedules implement the changeover delay, and the 16 deterministic conformance fixtures of the Python port are replayed bit for bit.
+
+## Install
+
+The crate is not on crates.io; use a git dependency (crate name `contingency`):
+
+```toml
+[dependencies]
+contingency = { git = "https://github.com/OperantKit/contingency-rs" }
+indexmap = "2"  # only needed to build concurrent schedules
+```
+
+## Minimal example
+
+```rust
+use contingency::{ResponseEvent, ScheduleBuilder};
+
+fn main() -> contingency::Result<()> {
+    let mut schedule = ScheduleBuilder::fr(5)?; // every 5th response is reinforced
+    let mut hits = Vec::new();
+    for t in 1..=10 {
+        let now = t as f64;
+        if schedule.step(now, Some(&ResponseEvent::new(now)))?.reinforced {
+            hits.push(t);
+        }
+    }
+    println!("{hits:?}"); // [5, 10]
+    Ok(())
+}
+```
+
+A schedule is driven by `schedule.step(now, event)`; `event` is `Some(&ResponseEvent)` (use `ResponseEvent::on(operandum, time)` for a named operandum) or `None` for the passage of time. The returned `Outcome.reinforced` says whether a reinforcer is delivered at `now`. Variable schedules take `n_intervals` and `seed: Option<u64>`, e.g. `ScheduleBuilder::vi(30.0, 12, Some(42))`. Concurrent schedules: `ScheduleBuilder::concurrent(IndexMap<String, Box<dyn Schedule>>, cod, frco)`.
+
+## Docs
+
+- [README](https://github.com/OperantKit/contingency-rs/blob/main/README.md): scope, 30-second example, why not to hand-roll a schedule, semantic invariants
+- [AGENTS.md](https://github.com/OperantKit/contingency-rs/blob/main/AGENTS.md): when to use this crate and what not to do
+- [Correspondence with contingency-py](https://github.com/OperantKit/contingency-rs/blob/main/docs/en/correspondence.md): 1:1 mapping to the Python port
+
+## Related packages
+
+- [contingency-py](https://github.com/OperantKit/contingency-py): Python engine and executable specification; owns the shared conformance fixtures (`pip install contingency-py`)
+- [contingency-dsl](https://github.com/OperantKit/contingency-dsl): the schedule language specification (grammar, AST schema, conformance cases)
+- [contingency-dsl-py](https://github.com/OperantKit/contingency-dsl-py): Python parser for the DSL (`pip install contingency-dsl-py`)
+- [session-runner](https://github.com/OperantKit/session-runner): runs a schedule as a full session against a virtual or hardware apparatus (`pip install session-runner`)

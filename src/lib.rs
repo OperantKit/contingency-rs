@@ -37,3 +37,13 @@ pub use constants::TIME_TOL;
 pub use errors::{ContingencyError, Result};
 pub use schedule::{ArmableSchedule, Schedule};
 pub use types::{Observation, Outcome, Reinforcer, ResponseEvent};
+
+/// Compiles and runs every `rust` code block in `README.md` as a doctest.
+#[cfg(doctest)]
+#[doc = include_str!("../README.md")]
+pub struct ReadmeDoctests;
+
+/// Compiles and runs every `rust` code block in `README.ja.md` as a doctest.
+#[cfg(doctest)]
+#[doc = include_str!("../README.ja.md")]
+pub struct ReadmeJaDoctests;
