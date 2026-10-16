@@ -22,10 +22,18 @@ to `components[key]`; all other components receive a tick at the same
 
 ### Changeover Delay (COD)
 
-When the subject switches from operandum A to B, reinforcement on
-the new operandum is suppressed (consumed silently) for `cod` time
-units after the switch. The timer anchors on the switching response
-and re-anchors on every subsequent confirmed switch.
+When the subject switches from operandum A to B, no response on the
+new operandum is reinforced for `cod` time units after the switch.
+The timer anchors on the switching response and re-anchors on every
+subsequent confirmed switch.
+
+A reinforcer that B's component sets up during the COD is **held**,
+not lost. It is delivered by the first response on B after the COD
+ends, and B's component does not start its next interval (or ratio)
+until that delivery. Switching away from B during the COD keeps the
+reinforcer on B. This is the procedure of Herrnstein (1961): no
+response was reinforced within 1.5 s of a changeover, and the
+programmed reinforcer stayed available until collected.
 
 ### Fixed-Ratio Changeover (FRCO)
 
@@ -44,6 +52,7 @@ operandum are not yet "a changeover" and are **not** COD-gated.
 | `last_operandum` | str? | Operandum of the most recent **confirmed** response. |
 | `switch_time` | float? | Time of the last confirmed changeover (for COD). |
 | `consecutive_new_count` | int | Running count during a FRCO streak. |
+| `pending` | dict[str, list[Reinforcer]] | Reinforcers held by the compound per operandum, oldest first (components other than FR/VR/RR/FI/VI/RI). |
 | `last_now` | float? | Monotonic-time check. |
 
 ## Step pseudocode
@@ -56,31 +65,37 @@ fn step(now, event):
 
     if event is None:
         // Pure tick: advance every component; no changeover logic.
-        outcome, _ = advance_components(now, None, None)
+        outcome, _, _ = advance_components(now, None, None, gated=false)
         return outcome
 
     operandum = event.operandum
     if operandum not in components:
         raise Config(...)
 
-    outcome, from_event = advance_components(now, operandum, event)
-
     // Register changeover state BEFORE gating: the changeover
     // response itself is subject to the COD it opens.
     register_event(operandum, now)
+    gated = cod_active(operandum, now)
 
-    if outcome.reinforced and from_event and cod_active(operandum, now):
-        // Consume reinforcement; meta records the suppression.
+    outcome, from_event, held = advance_components(now, operandum, event, gated)
+    if not gated:
+        outcome, from_event = deliver_pending(operandum, now, outcome, from_event)
+
+    if held:
+        // The reinforcer stays set up on the component; meta records
+        // that this response was not reinforced because of the COD.
         return Outcome::unreinforced_with_meta({
             "cod_suppressed": true, "operandum": operandum,
         })
     return outcome
 ```
 
-### `advance_components(now, event_operandum, event)`
+### `advance_components(now, event_operandum, event, gated)`
 
 Steps every component with `(now, None)` except the matched one,
-which gets `(now, event)`. Returns `(outcome, from_event)`:
+which gets `(now, event)`. When `gated`, the matched component is
+stepped through `step_gated` instead. Returns
+`(outcome, from_event, held)`:
 
 1. Event-matched component's outcome if it reinforced → `from_event=True`.
 2. Otherwise, first reinforced tick outcome from any other component
@@ -89,9 +104,58 @@ which gets `(now, event)`. Returns `(outcome, from_event)`:
    preserving its `meta` → `from_event=True`.
 4. Otherwise empty `Outcome()` → `from_event=False`.
 
+`held` is `true` iff `step_gated` held a reinforcer on the matched
+component.
+
 Rationale: a time-based component (FT/VT/RT) that fires on a pure
 tick must not be silently dropped just because an event arrived on
 another operandum.
+
+### `step_gated(component, now, event)`
+
+```
+if component is FR | VR | RR | FI | VI | RI:
+    probe = deep_copy(component)
+    if probe.step(now, event).reinforced:
+        component.step(now, None)  // tick only: reinforcer stays set up
+        return Outcome(), held=true
+    return component.step(now, event), held=false
+
+out = component.step(now, event)
+if out.reinforced:
+    pending[event.operandum].push(out.reinforcer)
+    return Outcome(), held=true
+return out, held=false
+```
+
+For ratio and interval schedules the response is tried on a copy
+first. If it would reinforce, the real component sees only a time
+tick, so an interval schedule stays armed and a ratio schedule stays
+one response short of its requirement; the first response after the
+COD then completes it, and the next interval or ratio starts there. A
+response that would not reinforce is applied to the real component,
+so responses inside the COD still count toward a ratio.
+
+Any other component (FT/VT/RT, DRO/DRL/DRH, nested compounds) can
+reinforce on a tick or needs to see every response, so withholding
+the response would lose the reinforcer or corrupt the component. The
+response is applied as usual and the reinforcer is queued in
+`pending`; the component's own next cycle starts at once.
+
+In the Rust port the type test is `Schedule::probe_response`: FR, VR,
+RR, FI, VI and RI return `Some(would_reinforce)` by stepping a `clone`
+of themselves, and every other schedule (including `LimitedHold` and
+user-defined schedules) returns the default `None` and takes the
+queue path. `pending` is an `IndexMap<String, VecDeque<Reinforcer>>`.
+
+### `deliver_pending(operandum, now, outcome, from_event)`
+
+Called after `advance_components` for an ungated response. If
+`pending[operandum]` is empty, returns its inputs. Otherwise a
+reinforcer the component produced on this response joins the back of
+the queue, and the oldest one is delivered with `time = now`
+(`from_event = true`), so each response delivers at most one
+reinforcer. `reset()` clears `pending`.
 
 ### `register_event(operandum, now)`
 
@@ -122,6 +186,7 @@ Returns `True` iff:
 - `switch_time = None`
 - `consecutive_new_count = 0`
 - `last_now = None`
+- `pending = {}`
 
 ## Edge cases
 
@@ -130,7 +195,8 @@ Returns `True` iff:
 - Unknown operandum in event: `Config`.
 - **Gating order**: the changeover response is covered by the COD
   window it opens. Switching to a new operandum and earning a
-  reinforcer on the same response suppresses that reinforcer.
+  reinforcer on the same response holds that reinforcer until the
+  first response after the COD.
 - **Tick-side reinforcement is never gated.** If a response on A and
   a timer-fired reinforcer on B land on the same `step()` call, B's
   reinforcer is surfaced with `from_event=False` and not COD-gated.
@@ -165,7 +231,8 @@ within a single step.
 ## Determinism
 
 Inherits the determinism of its components. No RNG in the compound
-itself.
+itself. The probe in `step_gated` is a copy, so a discarded probe
+does not advance the real component's RNG.
 
 ## Divergence from Swift original
 

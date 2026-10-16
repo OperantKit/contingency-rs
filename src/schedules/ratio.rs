@@ -33,7 +33,7 @@ use rand::{rngs::SmallRng, Rng, SeedableRng};
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::helpers::fleshler_hoffman::generate_ratios;
-use crate::schedule::Schedule;
+use crate::schedule::{probe_on_clone, Schedule};
 use crate::types::{Outcome, Reinforcer, ResponseEvent};
 use crate::Result;
 
@@ -50,7 +50,7 @@ use crate::Result;
 ///
 /// Skinner, B. F. (1957). *Schedules of reinforcement* (with C. B.
 /// Ferster). Appleton-Century-Crofts.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FR {
     n: u64,
     count: u64,
@@ -98,6 +98,10 @@ impl Schedule for FR {
         Ok(Outcome::empty())
     }
 
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
+    }
+
     fn reset(&mut self) {
         self.count = 0;
         self.last_now = None;
@@ -136,7 +140,7 @@ pub fn crf() -> FR {
 ///
 /// Skinner, B. F. (1957). *Schedules of reinforcement* (with C. B.
 /// Ferster). Appleton-Century-Crofts.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct VR {
     mean: f64,
     n_intervals: usize,
@@ -251,6 +255,10 @@ impl Schedule for VR {
         Ok(Outcome::empty())
     }
 
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
+    }
+
     fn reset(&mut self) {
         self.rng = match self.seed {
             Some(s) => SmallRng::seed_from_u64(s),
@@ -275,7 +283,7 @@ impl Schedule for VR {
 ///
 /// Skinner, B. F. (1957). *Schedules of reinforcement* (with C. B.
 /// Ferster). Appleton-Century-Crofts.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RR {
     p: f64,
     initial_rng: SmallRng,
@@ -336,6 +344,10 @@ impl Schedule for RR {
             return Ok(Outcome::reinforced(Reinforcer::at(now)));
         }
         Ok(Outcome::empty())
+    }
+
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
     }
 
     fn reset(&mut self) {

@@ -9,11 +9,18 @@
 //!
 //! # Changeover Delay (COD)
 //!
-//! When the subject switches from operandum A to operandum B, the
-//! reinforcer that would otherwise be delivered on B is *suppressed*
-//! for `cod` time units after the switch. This discourages rapid
-//! alternation and superstitious changeover responding. The timer
-//! resets on every subsequent changeover: "since the last changeover".
+//! When the subject switches from operandum A to operandum B, no
+//! response on B is reinforced for `cod` time units after the switch.
+//! This discourages rapid alternation and superstitious changeover
+//! responding. The timer resets on every subsequent changeover: "since
+//! the last changeover".
+//!
+//! A reinforcer that B's component sets up during the COD is *held*,
+//! not lost: it is delivered by the first response on B after the COD
+//! ends, and B's component does not start its next interval (or ratio)
+//! until that delivery. This is the procedure of Herrnstein (1961):
+//! "no response was reinforced within 1.5 seconds of a changeover",
+//! with the programmed reinforcer kept until collected.
 //!
 //! If no changeover has yet occurred (e.g. the very first response of
 //! a session), COD is not active. This implements the standard
@@ -48,6 +55,8 @@
 //! the Experimental Analysis of Behavior*, 4(3), 267-272.
 //! <https://doi.org/10.1901/jeab.1961.4-267>
 
+use std::collections::VecDeque;
+
 use indexmap::IndexMap;
 
 use crate::{
@@ -68,11 +77,30 @@ use crate::{
 ///
 /// # Priority of the returned outcome
 ///
-/// 1. Event-side reinforcement (not COD-suppressed).
+/// 1. Event-side reinforcement (not COD-gated).
 /// 2. First tick-side reinforcement in insertion order (never COD-gated).
-/// 3. Event-side un-reinforced outcome, preserving its `meta`
-///    (e.g. `cod_suppressed`).
+/// 3. Event-side un-reinforced outcome, preserving its `meta`.
 /// 4. Empty outcome.
+///
+/// # Holding reinforcers under COD
+///
+/// While COD is active on the responded operandum, a reinforcer that
+/// the response would produce is held and the step returns an
+/// un-reinforced outcome carrying `meta["cod_suppressed"] = true` and
+/// `meta["operandum"]`. The first response on that operandum after the
+/// COD collects the held reinforcer. How it is held depends on the
+/// component:
+///
+/// - FR, VR, RR, FI, VI, RI ([`Schedule::probe_response`] returns
+///   `Some`): the response is first tried on a clone. If the clone
+///   would reinforce, the real component receives only a time tick, so
+///   the reinforcer stays set up and its next interval or ratio does
+///   not start until delivery. A response that would not reinforce is
+///   applied as usual, so it counts toward a ratio.
+/// - Any other component (time-based, differential, nested compound):
+///   the response is applied as usual, so the component sees every
+///   response, and the reinforcer it produces is kept by `Concurrent`
+///   until delivery. The component's own next cycle starts at once.
 ///
 /// Rationale: a time-based component that fires on a step must not
 /// be silently dropped just because another operandum also saw a
@@ -91,6 +119,9 @@ pub struct Concurrent {
     active_cod: f64,
     consecutive_new_count: u32,
     last_now: Option<f64>,
+    /// Reinforcers held by the compound (components without a
+    /// [`Schedule::probe_response`]), per operandum, oldest first.
+    pending: IndexMap<String, VecDeque<Reinforcer>>,
 }
 
 impl std::fmt::Debug for Concurrent {
@@ -115,6 +146,7 @@ impl std::fmt::Debug for Concurrent {
             .field("active_cod", &self.active_cod)
             .field("consecutive_new_count", &self.consecutive_new_count)
             .field("last_now", &self.last_now)
+            .field("pending", &self.pending)
             .finish()
     }
 }
@@ -128,9 +160,10 @@ impl Concurrent {
     ///   schedule. Must contain at least two entries. Insertion order
     ///   is preserved for tick-side priority.
     /// * `cod` — Changeover Delay in the caller's time units. After a
-    ///   changeover, reinforcement on the new operandum is suppressed
-    ///   for `cod` time units. `0.0` disables COD. Must be `>= 0` and
-    ///   finite.
+    ///   changeover, no response on the new operandum is reinforced for
+    ///   `cod` time units; a reinforcer set up meanwhile is held until
+    ///   the first response after the COD. `0.0` disables COD. Must be
+    ///   `>= 0` and finite.
     /// * `frco` — fixed-ratio changeover: number of consecutive responses on
     ///   a new operandum required for the switch to count as a
     ///   changeover. `0` treats every switch as immediate.
@@ -231,6 +264,7 @@ impl Concurrent {
             active_cod: cod,
             consecutive_new_count: 0,
             last_now: None,
+            pending: IndexMap::new(),
         })
     }
 
@@ -249,18 +283,89 @@ impl Concurrent {
         self.components.keys().map(|s| s.as_str())
     }
 
+    /// Step `component` with `event` while COD gates its operandum.
+    ///
+    /// For components with a [`Schedule::probe_response`] the response
+    /// is first tried on a clone. If the clone would reinforce, the real
+    /// component only receives a time tick, so the reinforcer stays set
+    /// up (and its next interval or ratio does not start) until the
+    /// first response after the COD. Any other component receives the
+    /// response as usual and a reinforcer it produces is queued in
+    /// `pending[event.operandum]` for later delivery.
+    ///
+    /// Returns `(outcome, held)`.
+    fn step_gated(
+        component: &mut Box<dyn Schedule>,
+        pending: &mut IndexMap<String, VecDeque<Reinforcer>>,
+        now: f64,
+        event: &ResponseEvent,
+    ) -> Result<(Outcome, bool)> {
+        if let Some(would_reinforce) = component.probe_response(now, event) {
+            if would_reinforce? {
+                component.step(now, None)?;
+                return Ok((Outcome::empty(), true));
+            }
+            return Ok((component.step(now, Some(event))?, false));
+        }
+        let out = component.step(now, Some(event))?;
+        if out.reinforced {
+            if let Some(reinforcer) = out.reinforcer {
+                pending
+                    .entry(event.operandum.clone())
+                    .or_default()
+                    .push_back(reinforcer);
+                return Ok((Outcome::empty(), true));
+            }
+        }
+        Ok((out, false))
+    }
+
+    /// Deliver the oldest reinforcer held by `Concurrent` on
+    /// `operandum`. Called for an ungated response. If the component
+    /// reinforced on this response too, that reinforcer joins the back
+    /// of the queue, so each response delivers at most one reinforcer.
+    fn deliver_pending(
+        &mut self,
+        operandum: &str,
+        now: f64,
+        outcome: Outcome,
+        from_event: bool,
+    ) -> (Outcome, bool) {
+        let Some(queue) = self.pending.get_mut(operandum) else {
+            return (outcome, from_event);
+        };
+        if from_event && outcome.reinforced {
+            if let Some(r) = outcome.reinforcer {
+                queue.push_back(r);
+            }
+        }
+        let held = queue.pop_front().expect("pending queues are never empty");
+        if queue.is_empty() {
+            self.pending.shift_remove(operandum);
+        }
+        let delivered = Reinforcer {
+            time: now,
+            magnitude: held.magnitude,
+            label: held.label,
+        };
+        (Outcome::reinforced(delivered), true)
+    }
+
     /// Advance all components. Only `event_operandum` receives
-    /// `event`; the rest receive `None`. Returns the selected
-    /// outcome and a flag indicating whether it originated from the
-    /// event-matched component.
+    /// `event`; the rest receive `None`. Returns the selected outcome,
+    /// a flag indicating whether it originated from the event-matched
+    /// component, and a flag indicating whether that component set up
+    /// a reinforcer which COD is holding back (only when `gated`).
     fn advance_components(
         &mut self,
         now: f64,
         event_operandum: Option<&str>,
         event: Option<&ResponseEvent>,
-    ) -> Result<(Outcome, bool)> {
+        gated: bool,
+    ) -> Result<(Outcome, bool, bool)> {
         let mut outcome_for_event: Option<Outcome> = None;
         let mut tick_outcome: Option<Outcome> = None;
+        let mut held = false;
 
         for (key, component) in self.components.iter_mut() {
             let is_event_component = match event_operandum {
@@ -268,7 +373,14 @@ impl Concurrent {
                 None => false,
             };
             if is_event_component {
-                outcome_for_event = Some(component.step(now, event)?);
+                match event {
+                    Some(ev) if gated => {
+                        let (out, h) = Self::step_gated(component, &mut self.pending, now, ev)?;
+                        outcome_for_event = Some(out);
+                        held = h;
+                    }
+                    _ => outcome_for_event = Some(component.step(now, event)?),
+                }
             } else {
                 let out = component.step(now, None)?;
                 if tick_outcome.is_none() && out.reinforced {
@@ -279,16 +391,16 @@ impl Concurrent {
 
         if let Some(out) = outcome_for_event.as_ref() {
             if out.reinforced {
-                return Ok((outcome_for_event.unwrap(), true));
+                return Ok((outcome_for_event.unwrap(), true, held));
             }
         }
         if let Some(tick) = tick_outcome {
-            return Ok((tick, false));
+            return Ok((tick, false, held));
         }
         if let Some(out) = outcome_for_event {
-            return Ok((out, true));
+            return Ok((out, true, held));
         }
-        Ok((Outcome::empty(), false))
+        Ok((Outcome::empty(), false, held))
     }
 
     /// Resolve the COD to arm for a switch `from_op -> to_op`. Uses
@@ -366,7 +478,7 @@ impl Schedule for Concurrent {
             // Pure tick: advance every component. A time-based
             // component may fire; its outcome is returned as-is
             // because no changeover is involved.
-            let (outcome, _) = self.advance_components(now, None, None)?;
+            let (outcome, _, _) = self.advance_components(now, None, None, false)?;
             // Also advance punishment components' clocks on pure ticks.
             if let Some(punish) = self.punish.as_mut() {
                 for p in punish.values_mut() {
@@ -386,15 +498,22 @@ impl Schedule for Concurrent {
             )));
         }
 
-        // Step components; only the matched one sees the event.
-        // Advance before gating so that a suppressed reinforcer still
-        // advances the component's state.
-        let (outcome, from_event) = self.advance_components(now, Some(&operandum), Some(event))?;
-
         // Update changeover bookkeeping. This happens before gating so
         // that the response which completes a changeover is itself
         // covered by the COD window it opens (Catania, 1966).
         self.register_event(&operandum, now);
+        let gated = self.cod_active(&operandum, now);
+
+        // Step components; only the matched one sees the event. Under
+        // COD, a reinforcer the matched component would deliver is held
+        // until the first response after the COD (Herrnstein, 1961).
+        let (outcome, from_event, held) =
+            self.advance_components(now, Some(&operandum), Some(event), gated)?;
+        let (outcome, from_event) = if gated {
+            (outcome, from_event)
+        } else {
+            self.deliver_pending(&operandum, now, outcome, from_event)
+        };
 
         // Advance punishment schedules; only the matched operandum's
         // punisher receives the event, the rest receive a tick.
@@ -409,13 +528,13 @@ impl Schedule for Concurrent {
             }
         }
 
-        let cod_suppressed = outcome.reinforced && from_event && self.cod_active(&operandum, now);
-        let base_fired = outcome.reinforced && from_event && !cod_suppressed;
+        let cod_suppressed = held;
+        let base_fired = outcome.reinforced && from_event;
         let punisher_fired = punish_outcome.as_ref().is_some_and(|p| p.reinforced);
 
         if cod_suppressed && !punisher_fired {
-            // Absorb the reinforcement: component advanced but subject
-            // does not receive the reinforcer.
+            // The reinforcer stays held and is not delivered on this
+            // response.
             return Ok(Outcome::empty()
                 .with_meta("cod_suppressed", MetaValue::Bool(true))
                 .with_meta("operandum", MetaValue::Str(operandum)));
@@ -503,6 +622,7 @@ impl Schedule for Concurrent {
         self.active_cod = self.cod;
         self.consecutive_new_count = 0;
         self.last_now = None;
+        self.pending.clear();
     }
 }
 
@@ -513,7 +633,12 @@ impl Schedule for Concurrent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schedules::{ratio::FR, time_based::FT};
+    use crate::schedules::{
+        differential::{DroMode, DRO},
+        interval::FI,
+        ratio::FR,
+        time_based::FT,
+    };
 
     fn make_two(
         left: Box<dyn Schedule>,
@@ -1077,23 +1202,125 @@ mod tests {
         assert!(!out.reinforced);
     }
 
+    // --- Held reinforcers (Herrnstein, 1961) -----------------------------
+
+    fn make_ab(a: Box<dyn Schedule>, b: Box<dyn Schedule>) -> IndexMap<String, Box<dyn Schedule>> {
+        let mut m: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        m.insert("a".into(), a);
+        m.insert("b".into(), b);
+        m
+    }
+
     #[test]
-    fn suppression_consumes_component_reinforcement() {
-        // Left FR(1), right FR(2) — the suppressed reinforcement must
-        // still advance the right component's count (so a fresh FR(2)
-        // must be completed to reinforce again).
+    fn suppressed_reinforcer_is_held_until_cod_ends() {
+        let comps = make_ab(
+            Box::new(FR::new(1).unwrap()),
+            Box::new(FI::new(5.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 1.5, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        // FI 5 on b is set up at t=5. Switch a -> b at t=6: within COD.
+        let out = sch.step(6.0, Some(&ev("b", 6.0))).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        // First b response after the 1.5-s COD collects the held reinforcer.
+        let out = sch.step(7.6, Some(&ev("b", 7.6))).unwrap();
+        assert!(out.reinforced);
+        assert_eq!(out.reinforcer.as_ref().unwrap().time, 7.6);
+    }
+
+    #[test]
+    fn held_reinforcer_survives_switching_back() {
+        let comps = make_ab(
+            Box::new(FR::new(100).unwrap()),
+            Box::new(FI::new(5.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 1.5, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        assert!(!sch.step(6.0, Some(&ev("b", 6.0))).unwrap().reinforced);
+        sch.step(6.5, Some(&ev("a", 6.5))).unwrap();
+        // Back to b: a new COD starts at t=7.
+        assert!(!sch.step(7.0, Some(&ev("b", 7.0))).unwrap().reinforced);
+        assert!(sch.step(8.6, Some(&ev("b", 8.6))).unwrap().reinforced);
+    }
+
+    #[test]
+    fn next_interval_starts_at_delivery_not_at_setup() {
+        let comps = make_ab(
+            Box::new(FR::new(1).unwrap()),
+            Box::new(FI::new(5.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 1.5, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        sch.step(6.0, Some(&ev("b", 6.0))).unwrap(); // held
+        assert!(sch.step(7.6, Some(&ev("b", 7.6))).unwrap().reinforced);
+        // Next FI 5 is timed from the delivery at 7.6, so it sets up at 12.6.
+        assert!(!sch.step(12.0, Some(&ev("b", 12.0))).unwrap().reinforced);
+        assert!(sch.step(12.7, Some(&ev("b", 12.7))).unwrap().reinforced);
+    }
+
+    #[test]
+    fn time_based_reinforcer_is_held_not_lost() {
+        let comps = make_ab(
+            Box::new(FR::new(100).unwrap()),
+            Box::new(FT::new(5.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 2.0, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        // FT 5 fires on the b response at 5.5, which opens a 2-s COD.
+        let out = sch.step(5.5, Some(&ev("b", 5.5))).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        let out = sch.step(7.6, Some(&ev("b", 7.6))).unwrap();
+        assert!(out.reinforced);
+        assert_eq!(out.reinforcer.as_ref().unwrap().time, 7.6);
+    }
+
+    #[test]
+    fn responses_inside_cod_still_reach_dro() {
+        let comps = make_ab(
+            Box::new(FR::new(100).unwrap()),
+            Box::new(DRO::new(2.0, DroMode::Momentary).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 1.0, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        // The b response at 2.0 lands on the DRO boundary inside COD.
+        assert!(!sch.step(2.0, Some(&ev("b", 2.0))).unwrap().reinforced);
+        sch.step(3.5, None).unwrap();
+        // [2, 4) contains the b response at 2.0, so DRO must not pay at 4.0.
+        assert!(!sch.step(4.0, None).unwrap().reinforced);
+        // The DRO reinforcer set up at 2.0 is collected by the next b response.
+        assert!(sch.step(4.5, Some(&ev("b", 4.5))).unwrap().reinforced);
+    }
+
+    #[test]
+    fn held_ratio_reinforcer_restarts_count_after_delivery() {
         let comps = make_two(Box::new(FR::new(1).unwrap()), Box::new(FR::new(2).unwrap()));
         let mut sch = Concurrent::new(comps, 10.0, 0).unwrap();
         sch.step(0.0, Some(&ev("left", 0.0))).unwrap();
         sch.step(1.0, Some(&ev("right", 1.0))).unwrap();
+        // Ratio completed inside COD: held, not delivered.
         let out = sch.step(1.5, Some(&ev("right", 1.5))).unwrap();
         assert!(!out.reinforced);
         assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
-        // First response after COD — count goes to 1.
-        let out = sch.step(12.0, Some(&ev("right", 12.0))).unwrap();
-        assert!(!out.reinforced);
-        // Second response after COD — FR(2) fires.
-        let out = sch.step(12.1, Some(&ev("right", 12.1))).unwrap();
-        assert!(out.reinforced);
+        // First response after COD collects it.
+        assert!(sch.step(12.0, Some(&ev("right", 12.0))).unwrap().reinforced);
+        // The count then restarts: two fresh responses are needed.
+        assert!(!sch.step(12.1, Some(&ev("right", 12.1))).unwrap().reinforced);
+        assert!(sch.step(12.2, Some(&ev("right", 12.2))).unwrap().reinforced);
+    }
+
+    #[test]
+    fn reset_clears_held_reinforcers() {
+        let comps = make_ab(
+            Box::new(FR::new(100).unwrap()),
+            Box::new(FT::new(5.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 2.0, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        assert!(!sch.step(5.5, Some(&ev("b", 5.5))).unwrap().reinforced); // queued
+        sch.reset();
+        // Fresh session: no queued reinforcer to collect on b.
+        assert!(!sch.step(0.0, Some(&ev("b", 0.0))).unwrap().reinforced);
     }
 }

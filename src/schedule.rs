@@ -33,6 +33,33 @@ pub trait Schedule: Send {
 
     /// Return the schedule to its post-construction state.
     fn reset(&mut self);
+
+    /// Report whether a response `event` at `now` would reinforce,
+    /// without changing this schedule's state.
+    ///
+    /// Returns `Some(..)` only for schedules whose reinforcer can be
+    /// held inside the schedule: a time tick never reinforces them and
+    /// responses matter only through the reinforcing one, so a caller
+    /// may withhold that response (stepping with `None` instead) to
+    /// keep the reinforcer set up. FR, VR, RR, FI, VI and RI implement
+    /// it by trying the response on a clone. The default `None` means
+    /// the schedule offers no such probe. [`crate::schedules::Concurrent`]
+    /// uses it to hold reinforcers during a changeover delay.
+    fn probe_response(&self, _now: f64, _event: &ResponseEvent) -> Option<Result<bool>> {
+        None
+    }
+}
+
+/// Try `event` on a clone of `schedule` and report whether it would
+/// reinforce. Shared body of [`Schedule::probe_response`] for the
+/// hold-capable schedules.
+pub(crate) fn probe_on_clone<S: Schedule + Clone>(
+    schedule: &S,
+    now: f64,
+    event: &ResponseEvent,
+) -> Option<Result<bool>> {
+    let mut probe = schedule.clone();
+    Some(probe.step(now, Some(event)).map(|out| out.reinforced))
 }
 
 /// Interval-family schedules wrappable by `LimitedHold` expose two
@@ -66,6 +93,10 @@ impl<T: Schedule + ?Sized> Schedule for Box<T> {
 
     fn reset(&mut self) {
         (**self).reset()
+    }
+
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        (**self).probe_response(now, event)
     }
 }
 

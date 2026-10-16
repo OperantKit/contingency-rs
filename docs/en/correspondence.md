@@ -271,6 +271,7 @@ plus an additional Timeout invariant introduced by Wave 1.
 | G3 | `Concurrent` gating order: register changeover BEFORE checking COD; COD does not gate tick-side reinforcement. | `concurrent.rs`. |
 | G3a | `Concurrent` directional COD overrides: `cod_directional[(from, to)]` replaces base `cod` for that transition; self-transitions and negative values rejected. | `concurrent.rs:187-201`. |
 | G3b | `Concurrent` component-form `punish`: per-operandum punishment schedule stepped after reinforcement decision; does not share COD state with the main components. | `concurrent.rs:172`. |
+| G3c | `Concurrent` holds a reinforcer set up inside the COD until the first response on that operandum after it (Herrnstein, 1961). FR/VR/RR/FI/VI/RI hold it inside the component (Python: `deepcopy` probe; Rust: `Schedule::probe_response` on a `clone`); any other component's reinforcer is queued by the compound. | `concurrent.rs`, `schedule.rs`. |
 | G4 | `Chained` / `Tandem` do not step inactive components. | `sequence.rs`. |
 | G5 | `Alternative` forwards `(now, event)` to both components; resets both on a win. | `alternative.rs`. |
 | G6 | `DRO` momentary evaluates boundary BEFORE recording event; resetting pre-empts reinforcement on event step. | `differential.rs`. |

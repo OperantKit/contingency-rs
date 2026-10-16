@@ -270,6 +270,7 @@ relaxed 化は `BY_DESIGN`（§5 Gotcha G11 参照）。
 | G3 | `Concurrent` の gating 順序：COD チェックの前に changeover を登録。COD は tick 側強化を gate しない。 | `concurrent.rs`。 |
 | G3a | `Concurrent` の方向別 COD 上書き：`cod_directional[(from, to)]` がそのトランジションについてベース `cod` を置き換える。自己トランジションと負値は拒否。 | `concurrent.rs:187-201`。 |
 | G3b | `Concurrent` の成分形式 `punish`：オペランダムごとの punishment スケジュールを強化判定後に step。メイン成分とは COD 状態を共有しない。 | `concurrent.rs:172`。 |
+| G3c | `Concurrent` は COD 中に設定された強化子を、そのオペランダムでの COD 明け最初の反応まで保持する（Herrnstein, 1961）。FR/VR/RR/FI/VI/RI は成分内で保持し（Python: `deepcopy` で試す、Rust: `clone` に対する `Schedule::probe_response`）、それ以外の成分の強化子は複合側の待ち行列に積む。 | `concurrent.rs`, `schedule.rs`。 |
 | G4 | `Chained` / `Tandem` は非アクティブ成分を step しない。 | `sequence.rs`。 |
 | G5 | `Alternative` は両成分に `(now, event)` を転送。win 時に両方 reset。 | `alternative.rs`。 |
 | G6 | `DRO` momentary は event を記録する**前**に境界判定。resetting は event step での強化を pre-empt。 | `differential.rs`。 |

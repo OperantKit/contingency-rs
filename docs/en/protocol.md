@@ -207,7 +207,9 @@ impl Outcome {
 `meta` is used by compound schedules to surface which component fired:
 
 - `Concurrent`: sets `cod_suppressed: bool` and `operandum: str` when a
-  reinforcer is gated away by COD.
+  response would have been reinforced but falls inside the COD. The
+  reinforcer is held on that operandum and delivered by its first
+  response after the COD.
 - `Multiple` / `Chained`: sets `current_component: str` to the currently
   active component's stimulus label, and
   `chain_transition: bool` at non-terminal link transitions in

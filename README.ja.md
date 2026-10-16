@@ -60,8 +60,8 @@ fn main() -> contingency::Result<()> {
             if operandum == "left" { left += 1 } else { right += 1 }
         }
     }
-    println!("left={left} right={right}"); // left=9 right=2 — シード固定なので毎回同じ
-    assert_eq!((left, right), (9, 2));
+    println!("left={left} right={right}"); // left=16 right=6 — シード固定なので毎回同じ
+    assert_eq!((left, right), (16, 6));
     Ok(())
 }
 ```
@@ -73,7 +73,7 @@ fn main() -> contingency::Result<()> {
 短い自作ループは次の点を誤りやすく、どれも報告するデータを変えてしまう:
 
 - **変動スケジュールの間隔.** VI/VR の値は Fleshler-Hoffman (1962) の数列で生成する (Hantula, 1991 の変法も `helpers::fleshler_hoffman` にある)。場当たり的な一様乱数や指数乱数ではない。`n_intervals` と `seed` はコンストラクタの明示的な引数なので、実行を正確に再現できる。
-- **並立スケジュールの切替遅延.** `Concurrent` は各反応をそのオペランダムをキーとするコンポーネントに振り分け、他のコンポーネントは `None` で進めて時間ベースのコンポーネントを止めない。切替後 `cod` 時間単位は強化を抑止し、固定比率の切替要件 (`frco`) と方向別 COD (`Concurrent::with_extensions`) にも対応する。
+- **並立スケジュールの切替遅延.** `Concurrent` は各反応をそのオペランダムをキーとするコンポーネントに振り分け、他のコンポーネントは `None` で進めて時間ベースのコンポーネントを止めない。切替後 `cod` 時間単位はどの反応も強化せず、その間に設定された強化子は COD 明けの最初の反応まで保持する (Herrnstein, 1961)。固定比率の切替要件 (`frco`) と方向別 COD (`Concurrent::with_extensions`) にも対応する。
 - **Python 版との適合性.** `tests/conformance.rs` は [contingency-py](https://github.com/OperantKit/contingency-py) の 22 件の JSON フィクスチャをリプレイする。決定的な 16 件は Python の結果とビット単位 (誤差 1e-9 以内) で一致しなければならず、決定的フィクスチャを追加してリプレイを書き忘れると網羅性テストが失敗する。シード付きの 6 件 (VR, VI, RI, RR, VT, RT) は両実装の擬似乱数生成器が異なるため `#[ignore]` にしている。
 - **性質テスト.** `tests/properties.rs` の 13 個の `proptest` 性質が、Fleshler-Hoffman の平均保存、VR/VI/RR のシード決定性、DRL/DRH の閾値、時刻の逆行の拒否などの不変条件を確かめる。
 - **1 つのエンジンを複数の環境で.** 同じスケジュールを C ABI (`include/contingency.h`、cbindgen で生成)、PyO3 (`python` フィーチャー)、WebAssembly (`wasm32` ターゲット)、UniFFI 経由の Swift/Kotlin (`uniffi` フィーチャー) から使える。`tests/e2e_c_ffi.rs` は実際の C プログラムをライブラリに対してコンパイル・実行する。
@@ -96,6 +96,7 @@ fn main() -> contingency::Result<()> {
 - Fleshler, M., & Hoffman, H. S. (1962). A progression for generating variable-interval schedules. *JEAB*, 5(4), 529-530. https://doi.org/10.1901/jeab.1962.5-529
 - Hantula, D. A. (1991). A simple BASIC program to generate values for variable-interval schedules of reinforcement. *JABA*, 24(4), 799-801.
 - Catania, A. C. (1966). Concurrent operants. In W. K. Honig (Ed.), *Operant behavior* (pp. 213-270). Appleton-Century-Crofts.
+- Herrnstein, R. J. (1961). Relative and absolute strength of response as a function of frequency of reinforcement. *JEAB*, 4(3), 267-272. https://doi.org/10.1901/jeab.1961.4-267
 - Reynolds, G. S. (1961). Behavioral contrast. *JEAB*, 4(1), 57-71.
 - Hodos, W. (1961). Progressive ratio as a measure of reward strength. *Science*, 134, 943-944.
 - Hursh, S. R. (1980). Economic concepts for the analysis of behavior. *JEAB*, 34(2), 219-238.

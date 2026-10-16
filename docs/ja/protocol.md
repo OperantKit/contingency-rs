@@ -210,8 +210,9 @@ impl Outcome {
 `meta` は複合スケジュールがどのコンポーネントが発火したかを表面
 に出すために使用される:
 
-- `Concurrent`: 強化子が COD によりゲートアウトされたときに
-  `cod_suppressed: bool` と `operandum: str` を設定する。
+- `Concurrent`: 強化されるはずの反応が COD の内側に入ったときに
+  `cod_suppressed: bool` と `operandum: str` を設定する。強化子は
+  その operandum に保持され、COD 明けの最初の反応で渡される。
 - `Multiple` / `Chained`: 現在活性なコンポーネントの刺激ラベルを
   `current_component: str` に設定し、`Chained` の非終端リンク遷移時
   には `chain_transition: bool` を設定する。

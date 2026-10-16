@@ -54,7 +54,7 @@ use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::helpers::fleshler_hoffman::generate_intervals;
-use crate::schedule::{ArmableSchedule, Schedule};
+use crate::schedule::{probe_on_clone, ArmableSchedule, Schedule};
 use crate::types::{Outcome, Reinforcer, ResponseEvent};
 use crate::Result;
 
@@ -119,6 +119,10 @@ impl Schedule for FI {
         }
 
         Ok(Outcome::empty())
+    }
+
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
     }
 
     fn reset(&mut self) {
@@ -236,6 +240,10 @@ impl Schedule for VI {
         Ok(Outcome::empty())
     }
 
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
+    }
+
     fn reset(&mut self) {
         self.master_rng = make_master_rng(self.master_seed);
         self.sequence = Self::generate(self.mean_interval, self.n_intervals, &mut self.master_rng);
@@ -323,6 +331,10 @@ impl Schedule for RI {
         }
 
         Ok(Outcome::empty())
+    }
+
+    fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
+        probe_on_clone(self, now, event)
     }
 
     fn reset(&mut self) {
