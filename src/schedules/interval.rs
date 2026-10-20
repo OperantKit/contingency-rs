@@ -642,6 +642,45 @@ mod tests {
         assert_eq!(first, second);
     }
 
+    /// Sorted Fleshler-Hoffman value set for one cycle. The set does
+    /// not depend on the seed (only the order does).
+    fn sorted_fh_cycle(mean: f64, n: usize) -> Vec<f64> {
+        let mut v = generate_intervals(mean, n, Some(0));
+        v.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        v
+    }
+
+    #[test]
+    fn vi_each_cycle_uses_every_fleshler_hoffman_value_once() {
+        // Respond exactly when each interval elapses; the realized
+        // intervals, cut into blocks of n, must each be one full
+        // Fleshler-Hoffman cycle (sampling without replacement).
+        for n in [3usize, 4, 5] {
+            let mean = 10.0;
+            let mut vi = VI::new(mean, n, Some(11)).unwrap();
+            let mut prev = 0.0_f64;
+            let mut intervals = Vec::new();
+            for _ in 0..(3 * n) {
+                let t = vi.arm_time();
+                let ev = ResponseEvent::new(t);
+                assert!(vi.step(t, Some(&ev)).unwrap().reinforced);
+                intervals.push(t - prev);
+                prev = t;
+            }
+            let expected = sorted_fh_cycle(mean, n);
+            for block in intervals.chunks(n) {
+                let mut got = block.to_vec();
+                got.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                for (g, e) in got.iter().zip(&expected) {
+                    assert!(
+                        (g - e).abs() < 1e-9,
+                        "n={n} block={block:?} expected={expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
     fn collect_reinforcement_times_vi(mut vi: VI, count: usize) -> Vec<f64> {
         collect_reinforcement_times_vi_mut(&mut vi, count)
     }
@@ -787,6 +826,37 @@ mod tests {
         // Response at 13 — 5 s since re-arm; reinforces.
         let e2 = ResponseEvent::new(13.0);
         assert!(lh.step(13.0, Some(&e2)).unwrap().reinforced);
+    }
+
+    #[test]
+    fn limited_hold_reinforces_within_window_shorter_than_one() {
+        // FI 5, hold 0.5: opportunity open during [5, 5.5]. The upper
+        // edge is arm_time + hold, so a response at 5.25 reinforces.
+        let mut lh = LimitedHold::new(FI::new(5.0).unwrap(), 0.5).unwrap();
+        let e = ResponseEvent::new(5.25);
+        assert!(lh.step(5.25, Some(&e)).unwrap().reinforced);
+    }
+
+    #[test]
+    fn limited_hold_vi_rearms_with_next_interval_after_missed_opportunity() {
+        // VI 10 (n = 5), hold 1: let the first opportunity lapse. The
+        // tick that notices it must withdraw it and re-arm the VI at
+        // now + (next interval of the cycle); a response at that time
+        // reinforces.
+        let vi = VI::new(10.0, 5, Some(3)).unwrap();
+        let first_arm = vi.arm_time();
+        let second_interval = vi.sequence[1];
+        let mut lh = LimitedHold::new(vi, 1.0).unwrap();
+        let t_tick = first_arm + 2.0;
+        assert!(!lh.step(t_tick, None).unwrap().reinforced);
+        let rearmed = lh.inner.arm_time();
+        assert!(
+            (rearmed - (t_tick + second_interval)).abs() < 1e-9,
+            "rearmed={rearmed} expected={}",
+            t_tick + second_interval
+        );
+        let e = ResponseEvent::new(rearmed);
+        assert!(lh.step(rearmed, Some(&e)).unwrap().reinforced);
     }
 
     #[test]

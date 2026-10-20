@@ -575,6 +575,29 @@ mod tests {
     }
 
     #[test]
+    fn vr_probe_response_predicts_next_step_without_mutating() {
+        // probe_response must answer "would this response reinforce?"
+        // and leave the schedule untouched, so the following step
+        // gives the same answer.
+        let mut s = VR::new(4.0, 5, Some(9)).unwrap();
+        let mut answers = Vec::new();
+        for i in 1..=40usize {
+            let t = i as f64;
+            let ev = ResponseEvent::new(t);
+            let predicted = s
+                .probe_response(t, &ev)
+                .expect("VR supports probing")
+                .unwrap();
+            let again = s.probe_response(t, &ev).unwrap().unwrap();
+            assert_eq!(predicted, again, "probe changed state at t={t}");
+            let actual = s.step(t, Some(&ev)).unwrap().reinforced;
+            assert_eq!(predicted, actual, "probe disagreed with step at t={t}");
+            answers.push(predicted);
+        }
+        assert!(answers.contains(&true) && answers.contains(&false));
+    }
+
+    #[test]
     fn vr_non_response_step_does_not_reinforce() {
         let mut s = VR::new(5.0, 12, Some(0)).unwrap();
         for t in [0.1f64, 0.2, 0.3] {

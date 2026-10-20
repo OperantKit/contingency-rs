@@ -564,6 +564,38 @@ mod tests {
     }
 
     #[test]
+    fn vt_each_cycle_uses_every_fleshler_hoffman_value_once() {
+        // Step exactly when each interval elapses; the realized
+        // intervals, cut into blocks of n, must each be one full
+        // Fleshler-Hoffman cycle (sampling without replacement).
+        for n in [3usize, 4, 5] {
+            let mean = 10.0;
+            let mut expected = generate_intervals(mean, n, Some(0));
+            expected.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mut s = VT::new(mean, n, Some(11)).unwrap();
+            assert!(!s.step(0.0, None).unwrap().reinforced);
+            let mut prev = 0.0_f64;
+            let mut intervals = Vec::new();
+            for _ in 0..(3 * n) {
+                let t = prev + s.required;
+                assert!(s.step(t, None).unwrap().reinforced);
+                intervals.push(t - prev);
+                prev = t;
+            }
+            for block in intervals.chunks(n) {
+                let mut got = block.to_vec();
+                got.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                for (g, e) in got.iter().zip(&expected) {
+                    assert!(
+                        (g - e).abs() < 1e-9,
+                        "n={n} block={block:?} expected={expected:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
     fn vt_first_step_does_not_reinforce() {
         let mut s = VT::new(30.0, 12, Some(42)).unwrap();
         assert!(!s.step(0.0, None).unwrap().reinforced);
