@@ -20,7 +20,7 @@
   "scripts": {
     "wasm:build": "cd .. && wasm-pack build --target web --release --out-dir pkg",
     "build": "rollup --config && cp ../pkg/contingency_bg.wasm dist/",
-    "test:e2e": "playwright test"
+    "test:e2e": "npm run build && playwright test"
   },
   "repository": {
     "type": "git",

@@ -8,13 +8,16 @@
   </head>
   <body></body>
   <script>
-    // The trial parameters come from ?trial=<JSON>.
-    const params = JSON.parse(new URLSearchParams(location.search).get("trial"));
+    // The trial parameters come from ?trial=<JSON>, or a list of them from ?timeline=<JSON>.
+    const query = new URLSearchParams(location.search);
+    const trials = query.has("timeline")
+      ? JSON.parse(query.get("timeline"))
+      : [JSON.parse(query.get("trial"))];
     const jsPsych = initJsPsych({
       on_finish: function () {
         window.experimentFinished = true;
       },
     });
-    jsPsych.run([Object.assign({ type: jsPsychContingency }, params)]);
+    jsPsych.run(trials.map((params) => Object.assign({ type: jsPsychContingency }, params)));
   </script>
 </html>

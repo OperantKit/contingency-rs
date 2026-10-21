@@ -1,41 +1,8 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { expect, test } from "@playwright/test";
 
-import { expect, Page, test } from "@playwright/test";
+import { ContingencyEvent, fixtureUrl, trialData, useOfflineJsPsych } from "./helpers";
 
-const jspsychDir = fileURLToPath(new URL("../node_modules/jspsych/", import.meta.url));
-
-// Serve the CDN copy of jsPsych from node_modules so the tests run offline and
-// against the version pinned in package.json.
-let pageErrors: string[] = [];
-
-test.beforeEach(async ({ page }) => {
-  pageErrors = [];
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  await page.route(/^https:\/\/unpkg\.com\/jspsych@8\.3\.0(\/.*)?$/, (route) => {
-    const url = new URL(route.request().url());
-    const isCss = url.pathname.endsWith(".css");
-    const file = isCss ? "css/jspsych.css" : "dist/index.browser.js";
-    route.fulfill({
-      body: readFileSync(path.join(jspsychDir, file)),
-      contentType: isCss ? "text/css" : "application/javascript",
-    });
-  });
-});
-
-// An exception inside a click handler leaves the trial running, so fail on any page error.
-test.afterEach(async ({}, testInfo) => {
-  if (testInfo.title.startsWith("an unsupported schedule type")) return;
-  expect(pageErrors).toEqual([]);
-});
-
-type ContingencyEvent = { t: number; type: string; id: number; operandum: number | null; potency?: number };
-
-async function trialData(page: Page) {
-  await page.waitForFunction(() => jsPsych.data.get().count() > 0);
-  return page.evaluate(() => jsPsych.data.get().values());
-}
+const { pageErrors } = useOfflineJsPsych(["an unsupported schedule type"]);
 
 test("FR 5: the fifth click is reinforced and recorded in the jsPsych data", async ({ page }) => {
   await page.goto("/examples/fr5.html");
@@ -79,10 +46,6 @@ test("FR 5: the fifth click is reinforced and recorded in the jsPsych data", asy
     expect(events[i].t).toBeGreaterThanOrEqual(events[i - 1].t);
   }
 });
-
-function fixtureUrl(trial: object) {
-  return `/tests/fixture.html?trial=${encodeURIComponent(JSON.stringify(trial))}`;
-}
 
 test("CRF: every click is reinforced", async ({ page }) => {
   await page.goto(fixtureUrl({ schedule: { type: "CRF" }, reinforcer_duration: 0, max_reinforcers: 3 }));
@@ -135,6 +98,32 @@ test("trial_duration ends the trial and responses during the reinforcer are igno
   expect(data.n_reinforcers).toBe(1);
 });
 
+test("max_reinforcers: responses counted during the last presentation produce no further reinforcer", async ({ page }) => {
+  await page.clock.install({ time: 0 });
+  await page.clock.pauseAt(1000);
+  await page.goto(
+    fixtureUrl({
+      schedule: { type: "CRF" },
+      reinforcer_duration: 300,
+      responses_during_reinforcer: "count",
+      max_reinforcers: 1,
+    })
+  );
+  const button = page.locator("#jspsych-contingency-btngroup button");
+  for (let i = 0; i < 3; i++) await button.click();
+  await page.clock.runFor(400);
+  const [data] = await trialData(page);
+  expect(data.n_responses).toBe(3);
+  expect(data.n_reinforcers).toBe(1);
+  expect(data.events.map((e: ContingencyEvent) => e.type)).toEqual([
+    "response",
+    "reinforcer_start",
+    "response",
+    "response",
+    "reinforcer_end",
+  ]);
+});
+
 test("two operanda: the button index is recorded as the operandum", async ({ page }) => {
   await page.goto(
     fixtureUrl({ schedule: { type: "FR", n: 2 }, operanda: ["left", "right"], reinforcer_duration: 0, max_reinforcers: 1 })
@@ -150,7 +139,6 @@ test("two operanda: the button index is recorded as the operandum", async ({ pag
 
 test("an unsupported schedule type is reported, not silently run", async ({ page }) => {
   await page.goto(fixtureUrl({ schedule: { type: "XYZ" } }));
-  await expect.poll(() => pageErrors.join("\n")).toContain("unsupported schedule type");
+  await expect.poll(() => pageErrors().join("\n")).toContain("unsupported schedule type");
 });
 
-declare const jsPsych: any;

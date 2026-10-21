@@ -3,13 +3,14 @@ import { ResponseEvent } from "contingency";
 
 import { version } from "../package.json";
 import { loadEngine } from "./load";
+import { downloadOkl, OklOptions, toOkl } from "./okl";
 import { buildSchedule, scheduleLabel, ScheduleSpec } from "./wrap";
 
 const info = <const>{
   name: "contingency",
   version: version,
   parameters: {
-    /** Schedule as plain data, e.g. `{ type: "FR", n: 5 }`. Supported: FR, CRF, EXT. */
+    /** Schedule as plain data, e.g. `{ type: "FR", n: 5 }` or `{ type: "VI", mean: 30, n: 12, seed: 1 }`. Supported: FR, VI, CRF, EXT. */
     schedule: {
       type: ParameterType.OBJECT,
       default: undefined,
@@ -77,12 +78,16 @@ const info = <const>{
   data: {
     /** Copy of the `schedule` parameter. */
     schedule: { type: ParameterType.OBJECT },
-    /** Human-readable schedule, e.g. "FR 5". */
+    /** Schedule in contingency-dsl notation, e.g. "FR 5" or "VI 30s". */
     schedule_label: { type: ParameterType.STRING },
     /** Copy of the `operanda` parameter. */
     operanda: { type: ParameterType.STRING, array: true },
     /** `jsPsych.getTotalTime()` when the trial started, in milliseconds. */
     trial_start_total_ms: { type: ParameterType.FLOAT },
+    /** `performance.now()` when the trial started, in milliseconds (the clock of `events`). */
+    trial_start_perf_ms: { type: ParameterType.FLOAT },
+    /** Trial length in seconds, on the same clock as `events`. */
+    trial_end_s: { type: ParameterType.FLOAT },
     /** Responses and reinforcer onsets/offsets; `t` is seconds from the trial start. */
     events: {
       type: ParameterType.COMPLEX,
@@ -126,6 +131,19 @@ type ContingencyEvent = {
 class ContingencyPlugin implements JsPsychPlugin<Info> {
   static info = info;
 
+  /**
+   * The contingency trials of `jsPsych.data.get()` as one OKL v1 session (text).
+   * `plugin_version` is added to the `# meta:` section.
+   */
+  static toOkl(data: unknown, options: OklOptions): string {
+    return toOkl(data, { ...options, meta: { plugin_version: info.version, ...(options?.meta ?? {}) } });
+  }
+
+  /** Offer OKL text as a file download. */
+  static downloadOkl(text: string, filename?: string): void {
+    downloadOkl(text, filename);
+  }
+
   constructor(private jsPsych: JsPsych) {}
 
   async trial(display_element: HTMLElement, trial: TrialType<Info>) {
@@ -141,7 +159,8 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
     const events: ContingencyEvent[] = [];
     let nResponses = 0;
     let nReinforcers = 0;
-    let presenting = 0;
+    // Reinforcers whose presentation has started but not ended.
+    const open = new Map<number, number | null>();
     let finished = false;
 
     display_element.innerHTML =
@@ -156,6 +175,10 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
       const finish = (reason: string) => {
         if (finished) return;
         finished = true;
+        // The display is cleared when the trial ends, which ends any presentation.
+        const tEnd = now();
+        for (const [id, operandum] of open) events.push({ t: tEnd, type: "reinforcer_end", id, operandum });
+        open.clear();
         schedule.free();
         this.jsPsych.pluginAPI.cancelAllKeyboardResponses();
         resolve({
@@ -163,6 +186,8 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
           schedule_label: scheduleLabel(spec),
           operanda: operanda,
           trial_start_total_ms: trialStartTotalMs,
+          trial_start_perf_ms: t0,
+          trial_end_s: tEnd,
           events: events,
           n_responses: nResponses,
           n_reinforcers: nReinforcers,
@@ -178,23 +203,28 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
         reinforcerEl.style.display = on ? "" : "none";
       };
 
-      const deliver = (outcome: { reinforced: boolean; reinforcer?: { magnitude: number } }, operandum: number | null) => {
+      // The reinforcer starts at the time the engine was stepped with (`t`).
+      const deliver = (
+        t: number,
+        outcome: { reinforced: boolean; reinforcer?: { magnitude: number } },
+        operandum: number | null
+      ) => {
         if (!outcome.reinforced) return;
         const id = nReinforcers++;
         const potency = outcome.reinforcer ? outcome.reinforcer.magnitude : 1.0;
-        events.push({ t: now(), type: "reinforcer_start", id, operandum, potency });
+        events.push({ t, type: "reinforcer_start", id, operandum, potency });
+        open.set(id, operandum);
         const end = () => {
+          if (finished) return;
           events.push({ t: now(), type: "reinforcer_end", id, operandum });
-          presenting = Math.max(0, presenting - 1);
-          if (presenting === 0) setPresenting(false);
+          open.delete(id);
+          if (open.size === 0) setPresenting(false);
           if (reachedMaxReinforcers()) finish("max_reinforcers");
         };
         if (trial.reinforcer_duration > 0) {
-          presenting++;
           setPresenting(true);
           this.jsPsych.pluginAPI.setTimeout(end, trial.reinforcer_duration);
         } else {
-          presenting++;
           end();
         }
       };
@@ -207,14 +237,17 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
           reinforcer: outcome.reinforcer ? { magnitude: outcome.reinforcer.magnitude } : undefined,
         };
         outcome.free();
-        deliver(result, operandum);
+        deliver(t, result, operandum);
       };
 
       const respond = (index: number) => {
         if (finished) return;
-        if (presenting > 0 && trial.responses_during_reinforcer === "ignore") return;
+        if (open.size > 0 && trial.responses_during_reinforcer === "ignore") return;
         const t = now();
         events.push({ t, type: "response", id: nResponses++, operandum: index });
+        // Once the last reinforcer has been delivered the trial only waits for its
+        // presentation to end; responses are recorded but cannot produce another.
+        if (reachedMaxReinforcers()) return;
         step(t, new ResponseEvent(t, operanda[index]), index);
       };
 
@@ -227,7 +260,7 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
 
       const tick = () => {
         if (finished) return;
-        step(now(), null, null);
+        if (!reachedMaxReinforcers()) step(now(), null, null);
         this.jsPsych.pluginAPI.setTimeout(tick, trial.tick_interval);
       };
       this.jsPsych.pluginAPI.setTimeout(tick, trial.tick_interval);

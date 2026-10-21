@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>contingency: VI 10 s with an OKL file</title>
+    <script src="https://unpkg.com/jspsych@8.3.0"></script>
+    <!-- contingency_bg.wasm is fetched from the same directory as this script. -->
+    <script src="../dist/index.browser.js"></script>
+    <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css" />
+  </head>
+  <body></body>
+  <script>
+    const jsPsych = initJsPsych({
+      on_finish: function () {
+        // One OKL v1 session file for the whole experiment.
+        const okl = jsPsychContingency.toOkl(jsPsych.data.get(), {
+          session_name: "vi10-demo",
+          wall_clock_start: jsPsych.getStartTime().toISOString(),
+          meta: { jspsych_version: jsPsych.version() },
+        });
+        jsPsychContingency.downloadOkl(okl, "vi10-demo.txt");
+        jsPsych.data.displayData("json");
+      },
+    });
+
+    const vi10 = {
+      type: jsPsychContingency,
+      schedule: { type: "VI", mean: 10, n: 12, seed: 1 },
+      stimulus: "<p>Click the button. On average, the first click after 10 s is reinforced.</p>",
+      reinforcer_duration: 500,
+      trial_duration: 60000,
+      end_key: "q",
+    };
+
+    jsPsych.run([vi10]);
+  </script>
+</html>
