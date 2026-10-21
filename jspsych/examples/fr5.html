@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>contingency: FR 5</title>
+    <script src="https://unpkg.com/jspsych@8.3.0"></script>
+    <!-- contingency_bg.wasm is fetched from the same directory as this script. -->
+    <script src="../dist/index.browser.js"></script>
+    <link href="https://unpkg.com/jspsych@8.3.0/css/jspsych.css" rel="stylesheet" type="text/css" />
+  </head>
+  <body></body>
+  <script>
+    const jsPsych = initJsPsych({
+      on_finish: function () {
+        jsPsych.data.displayData("json");
+      },
+    });
+
+    const fr5 = {
+      type: jsPsychContingency,
+      schedule: { type: "FR", n: 5 },
+      stimulus: "<p>Click the button. Every 5th click is reinforced.</p>",
+      reinforcer_duration: 500,
+      max_reinforcers: 1,
+      end_key: "q",
+    };
+
+    jsPsych.run([fr5]);
+  </script>
+</html>

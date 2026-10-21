@@ -5,6 +5,8 @@ edition = "2021"
 license = "MIT"
 repository = "https://github.com/OperantKit/contingency-rs"
 description = "Reinforcement contingency engine — Rust port of contingency-py. Mirrors the executable specification defined by the Python package and its conformance fixtures."
+# The jsPsych plugin is an npm package that wraps the WebAssembly build; keep it out of the crate.
+exclude = ["jspsych/"]
 
 [lib]
 name = "contingency"
