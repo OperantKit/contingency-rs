@@ -486,7 +486,7 @@ impl UniffiSchedule {
     /// the new operandum required to confirm a changeover (0 = every
     /// switch counts immediately).
     ///
-    /// References: Catania, A. C. (1966); Herrnstein, R. J. (1961).
+    /// References: Catania, A. C. (1963); Herrnstein, R. J. (1961).
     #[uniffi::constructor]
     pub fn concurrent(
         operanda: Vec<String>,

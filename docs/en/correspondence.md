@@ -366,10 +366,10 @@ cd apps/core/contingency-py
 .venv/bin/pytest -q
 ```
 
-Expected from the current audit:
+Counted on 2026-10-23 with `rustup run stable cargo test --all-features` (all of `python`, `uniffi`, `serial` enabled) and `.venv/bin/pytest -q` in `contingency-py`:
 
-- Rust: 429 lib + 14 conformance (strict) + 1 e2e_c_ffi + 1 e2e_uniffi + 1 e2e_wasm + 7 ffi_smoke + 2 hil_integration + 12 hw_serial + 16 hw_virtual + 13 proptest + 1 python_smoke + 14 uniffi_smoke + 1 doc-test = **512 tests green**; 6 stochastic conformance tests `#[ignore]`'d by default.
-- Python: **929 tests green**.
+- Rust: 512 lib + 19 conformance (strict) + 1 e2e_c_ffi + 1 e2e_uniffi + 1 e2e_wasm + 7 ffi_smoke + 11 fleshler_hoffman_shape + 2 hil_integration + 12 hw_serial_tests + 16 hw_virtual_tests + 13 properties + 1 python_smoke + 14 uniffi_smoke + 3 doc-tests = **613 tests green**; 6 stochastic conformance tests `#[ignore]`'d by default.
+- Python: **1084 passed, 8 skipped**.
 
 ## References
 
@@ -377,10 +377,10 @@ Azrin, N. H., & Holz, W. C. (1966). Punishment. In W. K. Honig (Ed.),
 *Operant behavior: Areas of research and application* (pp. 380-447).
 Appleton-Century-Crofts.
 
-Catania, A. C. (1966). Concurrent performances: Reinforcement
+Catania, A. C. (1963). Concurrent performances: Reinforcement
 interaction and response independence. *Journal of the Experimental
-Analysis of Behavior*, 9(3), 253-263.
-https://doi.org/10.1901/jeab.1966.9-253
+Analysis of Behavior*, 6(2), 253-263.
+https://doi.org/10.1901/jeab.1963.6-253
 
 Ferster, C. B., & Skinner, B. F. (1957). *Schedules of reinforcement*.
 Appleton-Century-Crofts.

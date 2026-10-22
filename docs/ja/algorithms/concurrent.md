@@ -4,10 +4,10 @@
 
 ## 参考文献
 
-Catania, A. C. (1966). Concurrent performances: Reinforcement
+Catania, A. C. (1963). Concurrent performances: Reinforcement
 interaction and response independence. *Journal of the Experimental
-Analysis of Behavior*, 9(3), 253-263.
-https://doi.org/10.1901/jeab.1966.9-253
+Analysis of Behavior*, 6(2), 253-263.
+https://doi.org/10.1901/jeab.1963.6-253
 
 Herrnstein, R. J. (1961). Relative and absolute strength of response
 as a function of frequency of reinforcement. *JEAB*, 4(3), 267-272.

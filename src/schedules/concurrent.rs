@@ -24,7 +24,7 @@
 //!
 //! If no changeover has yet occurred (e.g. the very first response of
 //! a session), COD is not active. This implements the standard
-//! "since-last-changeover" semantics of Catania (1966): each fresh
+//! "since-last-changeover" semantics of Catania (1963): each fresh
 //! switch re-anchors the COD clock.
 //!
 //! # Fixed-Ratio Changeover (FRCO)
@@ -45,10 +45,10 @@
 //!
 //! # References
 //!
-//! Catania, A. C. (1966). Concurrent performances: Reinforcement
+//! Catania, A. C. (1963). Concurrent performances: Reinforcement
 //! interaction and response independence. *Journal of the Experimental
-//! Analysis of Behavior*, 9(3), 253-263.
-//! <https://doi.org/10.1901/jeab.1966.9-253>
+//! Analysis of Behavior*, 6(2), 253-263.
+//! <https://doi.org/10.1901/jeab.1963.6-253>
 //!
 //! Herrnstein, R. J. (1961). Relative and absolute strength of
 //! response as a function of frequency of reinforcement. *Journal of
@@ -502,7 +502,7 @@ impl Schedule for Concurrent {
 
         // Update changeover bookkeeping. This happens before gating so
         // that the response which completes a changeover is itself
-        // covered by the COD window it opens (Catania, 1966).
+        // covered by the COD window it opens (Catania, 1963).
         self.register_event(&operandum, now);
         let gated = self.cod_active(&operandum, now);
 

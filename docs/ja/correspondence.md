@@ -364,10 +364,10 @@ cd apps/core/contingency-py
 .venv/bin/pytest -q
 ```
 
-現時点の監査結果：
+2026-10-23 に `rustup run stable cargo test --all-features`（`python`・`uniffi`・`serial` をすべて有効）と、`contingency-py` での `.venv/bin/pytest -q` で数えた結果：
 
-- Rust：lib 429 + conformance (strict) 14 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + hil_integration 2 + hw_serial 12 + hw_virtual 16 + proptest 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 1 = **テスト 512 件 green**。確率的 conformance 6 件は既定で `#[ignore]`。
-- Python：**テスト 929 件 green**。
+- Rust：lib 512 + conformance (strict) 19 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + fleshler_hoffman_shape 11 + hil_integration 2 + hw_serial_tests 12 + hw_virtual_tests 16 + properties 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 3 = **テスト 613 件 green**。確率的 conformance 6 件は既定で `#[ignore]`。
+- Python：**1084 件 passed、8 件 skipped**。
 
 ## 参考文献
 
@@ -375,10 +375,10 @@ Azrin, N. H., & Holz, W. C. (1966). Punishment. In W. K. Honig (Ed.),
 *Operant behavior: Areas of research and application* (pp. 380-447).
 Appleton-Century-Crofts.
 
-Catania, A. C. (1966). Concurrent performances: Reinforcement
+Catania, A. C. (1963). Concurrent performances: Reinforcement
 interaction and response independence. *Journal of the Experimental
-Analysis of Behavior*, 9(3), 253-263.
-https://doi.org/10.1901/jeab.1966.9-253
+Analysis of Behavior*, 6(2), 253-263.
+https://doi.org/10.1901/jeab.1963.6-253
 
 Ferster, C. B., & Skinner, B. F. (1957). *Schedules of reinforcement*.
 Appleton-Century-Crofts.
