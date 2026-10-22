@@ -113,6 +113,9 @@ const info = <const>{
 
 type Info = typeof info;
 
+/** Engine schedules allocated by trials that have not ended yet. */
+let activeSchedules = 0;
+
 type ContingencyEvent = {
   t: number;
   type: "response" | "reinforcer_start" | "reinforcer_end";
@@ -144,12 +147,22 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
     downloadOkl(text, filename);
   }
 
+  /**
+   * Number of engine schedules held by running trials (0 when no contingency trial is
+   * running). Each trial frees its schedule when it ends, also when jsPsych ends it
+   * without the plugin, as `jsPsych.abortExperiment` does.
+   */
+  static get activeSchedules(): number {
+    return activeSchedules;
+  }
+
   constructor(private jsPsych: JsPsych) {}
 
   async trial(display_element: HTMLElement, trial: TrialType<Info>) {
     await loadEngine(trial.wasm_url);
     const spec = trial.schedule as ScheduleSpec;
     const schedule = buildSchedule(spec);
+    activeSchedules++;
     const operanda: string[] = trial.operanda;
 
     const t0 = performance.now();
@@ -171,16 +184,24 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
     const reinforcerEl = display_element.querySelector<HTMLElement>("#jspsych-contingency-reinforcer");
     const buttonGroup = display_element.querySelector<HTMLElement>("#jspsych-contingency-btngroup");
 
+    // Stop the trial and free the schedule, exactly once.
+    let observer: MutationObserver | null = null;
+    const release = () => {
+      finished = true;
+      observer?.disconnect();
+      schedule.free();
+      activeSchedules--;
+      this.jsPsych.pluginAPI.cancelAllKeyboardResponses();
+    };
+
     return new Promise<object>((resolve) => {
       const finish = (reason: string) => {
         if (finished) return;
-        finished = true;
         // The display is cleared when the trial ends, which ends any presentation.
         const tEnd = now();
         for (const [id, operandum] of open) events.push({ t: tEnd, type: "reinforcer_end", id, operandum });
         open.clear();
-        schedule.free();
-        this.jsPsych.pluginAPI.cancelAllKeyboardResponses();
+        release();
         resolve({
           schedule: spec,
           schedule_label: scheduleLabel(spec),
@@ -264,6 +285,14 @@ class ContingencyPlugin implements JsPsychPlugin<Info> {
         this.jsPsych.pluginAPI.setTimeout(tick, trial.tick_interval);
       };
       this.jsPsych.pluginAPI.setTimeout(tick, trial.tick_interval);
+
+      // jsPsych.abortExperiment (or a jsPsych.finishTrial call from outside the plugin)
+      // ends the trial without calling finish: jsPsych only clears its timers and the
+      // display. Treat the buttons leaving the page as the end of the trial.
+      observer = new MutationObserver(() => {
+        if (!finished && !buttonGroup.isConnected) release();
+      });
+      observer.observe(display_element, { childList: true });
 
       if (trial.trial_duration !== null) {
         this.jsPsych.pluginAPI.setTimeout(() => finish("duration"), trial.trial_duration);

@@ -47,11 +47,13 @@ The page must be served over http(s); browsers do not fetch `.wasm` from `file:/
 
 At least one of `trial_duration`, `max_reinforcers` or `end_key` should be set; otherwise the trial does not end.
 
+Each trial frees its engine schedule when it ends, also when jsPsych ends it from outside the plugin (`jsPsych.abortExperiment`). `jsPsychContingency.activeSchedules` is the number of schedules held by trials still running (0 between trials).
+
 ## Data
 
 | Field | Description |
 |---|---|
-| `schedule`, `schedule_label` | The `schedule` parameter and its contingency-dsl notation, such as `FR 5` or `VI 30s` |
+| `schedule`, `schedule_label` | The `schedule` parameter and its contingency-dsl notation, such as `FR 5` or `VI 30s` (seconds are rounded to 3 decimals: `VI 0.3s`, `VI 1.235s`) |
 | `operanda` | The `operanda` parameter |
 | `trial_start_total_ms` | `jsPsych.getTotalTime()` at the start of the trial |
 | `trial_start_perf_ms`, `trial_end_s` | `performance.now()` at the start of the trial, and the trial length in seconds, on the clock of `events` |

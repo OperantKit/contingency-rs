@@ -47,11 +47,13 @@
 
 `trial_duration`・`max_reinforcers`・`end_key` のどれかは指定してください。どれも無いと試行が終わりません。
 
+各試行は、終わるときにエンジンのスケジュールを解放します。jsPsych がプラグインの外から試行を終えた場合（`jsPsych.abortExperiment`）も同じです。`jsPsychContingency.activeSchedules` は、まだ動いている試行が持つスケジュールの数です（試行と試行の間は 0）。
+
 ## データ
 
 | 欄 | 説明 |
 |---|---|
-| `schedule`, `schedule_label` | `schedule` パラメータと、`FR 5`・`VI 30s` のような contingency-dsl の表記 |
+| `schedule`, `schedule_label` | `schedule` パラメータと、`FR 5`・`VI 30s` のような contingency-dsl の表記（秒は小数 3 桁に丸める: `VI 0.3s`・`VI 1.235s`） |
 | `operanda` | `operanda` パラメータ |
 | `trial_start_total_ms` | 試行開始時の `jsPsych.getTotalTime()` |
 | `trial_start_perf_ms`, `trial_end_s` | 試行開始時の `performance.now()` と、試行の長さ（秒）。どちらも `events` と同じ時計 |

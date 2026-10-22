@@ -55,13 +55,26 @@ export function buildSchedule(spec: ScheduleSpec): Schedule {
   }
 }
 
+/** Decimal places kept when a time is written in a label. */
+const LABEL_SECONDS_DECIMALS = 3;
+
+/**
+ * Seconds rounded to three decimals with trailing zeros dropped ("0.3", "2.5", "30"), so
+ * that binary rounding noise such as 0.1 + 0.2 = 0.30000000000000004 does not show.
+ * A positive time that would round to 0 keeps three significant digits instead.
+ */
+function formatSeconds(seconds: number): string {
+  const rounded = Number(seconds.toFixed(LABEL_SECONDS_DECIMALS));
+  return String(rounded > 0 ? rounded : Number(seconds.toPrecision(LABEL_SECONDS_DECIMALS)));
+}
+
 /** Label in contingency-dsl notation, e.g. "FR 5" or "VI 30s". */
 export function scheduleLabel(spec: ScheduleSpec): string {
   switch (spec.type) {
     case "FR":
       return `FR ${spec.n}`;
     case "VI":
-      return `VI ${spec.mean}s`;
+      return `VI ${formatSeconds(spec.mean)}s`;
     default:
       return spec.type;
   }
