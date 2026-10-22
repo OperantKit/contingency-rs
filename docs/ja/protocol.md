@@ -9,7 +9,7 @@
 ## 真実の源泉
 
 `contingency-py` が executable specification の正典である。
-`contingency-py/conformance/` 配下の 22 個の conformance fixture が
+`contingency-py/conformance/` 配下の 23 個の conformance fixture が
 決定的スケジュールに対する bit 等価性のオラクルである。Rust crate は
 同じ契約を再実装し、その fixture により検証される。
 
@@ -212,7 +212,9 @@ impl Outcome {
 
 - `Concurrent`: 強化されるはずの反応が COD の内側に入ったときに
   `cod_suppressed: bool` と `operandum: str` を設定する。強化子は
-  その operandum に保持され、COD 明けの最初の反応で渡される。
+  その operandum に保持され、COD 明けの最初の反応で渡される。その
+  step で別のコンポーネントの時間経過による強化子を返すときは、返す
+  強化子が別の operandum のものなので `cod_suppressed` だけを設定する。
 - `Multiple` / `Chained`: 現在活性なコンポーネントの刺激ラベルを
   `current_component: str` に設定し、`Chained` の非終端リンク遷移時
   には `chain_transition: bool` を設定する。

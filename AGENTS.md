@@ -14,7 +14,7 @@ For pure-Python work, or to compile schedules written in [contingency-dsl](https
 
 - VI/VR values follow the Fleshler-Hoffman (1962) progression (Hantula, 1991, variant also available) with explicit `n_intervals` and `seed`; ad-hoc random draws produce a different distribution of inter-reinforcement intervals.
 - `Concurrent` routes each response to the component keyed by its operandum, keeps time-based components running, and applies the changeover delay (COD), fixed-ratio changeover (`frco`), and direction-specific COD.
-- `tests/conformance.rs` replays the 22 shared JSON fixtures; the 16 deterministic ones must match the Python outcomes within 1e-9, and a completeness test fails if a deterministic fixture is not replayed. 13 `proptest` properties cover invariants such as Fleshler-Hoffman mean preservation and seeded determinism.
+- `tests/conformance.rs` replays the 23 shared JSON fixtures; the 17 deterministic ones must match the Python outcomes within 1e-9, and a completeness test fails if a deterministic fixture is not replayed. 13 `proptest` properties cover invariants such as Fleshler-Hoffman mean preservation and seeded determinism.
 - Invalid input fails loudly: non-monotonic time returns `ContingencyError::State`; bad parameters return `ContingencyError::Config`.
 
 ## Do not

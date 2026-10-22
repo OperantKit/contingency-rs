@@ -88,8 +88,10 @@ use crate::{
 /// the response would produce is held and the step returns an
 /// un-reinforced outcome carrying `meta["cod_suppressed"] = true` and
 /// `meta["operandum"]`. The first response on that operandum after the
-/// COD collects the held reinforcer. How it is held depends on the
-/// component:
+/// COD collects the held reinforcer. If another component delivers a
+/// reinforcer on its tick at that step and no punisher fires, that
+/// reinforcer is returned instead, with `meta["cod_suppressed"] = true`
+/// and no `"operandum"` key. How it is held depends on the component:
 ///
 /// - FR, VR, RR, FI, VI, RI ([`Schedule::probe_response`] returns
 ///   `Some`): the response is first tried on a clone. If the clone
@@ -534,7 +536,12 @@ impl Schedule for Concurrent {
 
         if cod_suppressed && !punisher_fired {
             // The reinforcer stays held and is not delivered on this
-            // response.
+            // response. A reinforcer another component delivered on its
+            // tick at this step is still returned, with `cod_suppressed`
+            // recording the hold.
+            if outcome.reinforced && !from_event {
+                return Ok(outcome.with_meta("cod_suppressed", MetaValue::Bool(true)));
+            }
             return Ok(Outcome::empty()
                 .with_meta("cod_suppressed", MetaValue::Bool(true))
                 .with_meta("operandum", MetaValue::Str(operandum)));
@@ -1274,6 +1281,73 @@ mod tests {
         let out = sch.step(7.6, Some(&ev("b", 7.6))).unwrap();
         assert!(out.reinforced);
         assert_eq!(out.reinforcer.as_ref().unwrap().time, 7.6);
+    }
+
+    fn reinforced_on(sch: &mut Concurrent, steps: &[(f64, &str)]) -> Vec<bool> {
+        steps
+            .iter()
+            .map(|&(t, op)| sch.step(t, Some(&ev(op, t))).unwrap().reinforced)
+            .collect()
+    }
+
+    #[test]
+    fn tick_reinforcement_survives_hold_on_event_side() {
+        // On a step where COD holds the event-side reinforcer, a
+        // reinforcer another component delivers on its tick is still
+        // returned.
+        let comps = make_ab(
+            Box::new(FT::new(5.0).unwrap()),
+            Box::new(FI::new(3.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 2.0, 0).unwrap();
+        let got = reinforced_on(&mut sch, &[(0.0, "a"), (4.0, "b"), (5.0, "b"), (7.0, "b")]);
+        assert_eq!(got, vec![false, false, true, true]);
+    }
+
+    #[test]
+    fn tick_reinforcer_on_hold_step_records_hold() {
+        let comps = make_ab(
+            Box::new(FT::new(5.0).unwrap()),
+            Box::new(FI::new(3.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 2.0, 0).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        sch.step(4.0, Some(&ev("b", 4.0))).unwrap();
+        let out = sch.step(5.0, Some(&ev("b", 5.0))).unwrap();
+        assert_eq!(out.reinforcer.as_ref().unwrap().time, 5.0);
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
+        assert!(!out.meta.contains_key("operandum"));
+    }
+
+    #[test]
+    fn tick_reinforcement_survives_queued_hold() {
+        // Same as above when the event-side reinforcer is queued by
+        // `Concurrent` (a component it does not hold in place).
+        let comps = make_ab(
+            Box::new(FT::new(5.0).unwrap()),
+            Box::new(FT::new(1.0).unwrap()),
+        );
+        let mut sch = Concurrent::new(comps, 2.0, 0).unwrap();
+        let got = reinforced_on(&mut sch, &[(0.0, "a"), (4.0, "b"), (5.0, "b"), (7.0, "b")]);
+        assert_eq!(got, vec![false, false, true, true]);
+    }
+
+    #[test]
+    fn punisher_on_hold_step_still_wins_over_tick() {
+        // When a punisher fires on the hold step, the punisher outcome is
+        // returned and the tick reinforcer is not.
+        let comps = make_ab(
+            Box::new(FT::new(5.0).unwrap()),
+            Box::new(FI::new(3.0).unwrap()),
+        );
+        let mut p: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+        p.insert("b".into(), Box::new(FR::new(1).unwrap()));
+        let mut sch = Concurrent::with_extensions(comps, 2.0, 0, None, Some(p)).unwrap();
+        sch.step(0.0, Some(&ev("a", 0.0))).unwrap();
+        sch.step(4.0, Some(&ev("b", 4.0))).unwrap();
+        let out = sch.step(5.0, Some(&ev("b", 5.0))).unwrap();
+        assert_eq!(out.reinforcer.as_ref().unwrap().label, "SR-");
+        assert_eq!(out.meta.get("cod_suppressed"), Some(&MetaValue::Bool(true)));
     }
 
     #[test]

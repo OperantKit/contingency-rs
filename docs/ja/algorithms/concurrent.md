@@ -33,6 +33,8 @@ COD の間に B のコンポーネントが設定した強化子は捨てられ�
 い。COD の間に B を離れても、強化子は B に残る。これは Herrnstein
 (1961) の手続きである。切り替えから 1.5 秒以内の反応は強化され
 ず、設定された強化子は取られるまで残っていた。
+B の強化子を保持した step で別のコンポーネントが時間経過により強化
+子を出し、罰が発火しない場合は、その強化子をそのまま返す。
 
 ### 固定比率切替 (FRCO)
 
@@ -82,8 +84,12 @@ fn step(now, event):
         outcome, from_event = deliver_pending(operandum, now, outcome, from_event)
 
     if held:
-        // 強化子はコンポーネントに設定されたまま残る。この反応が
-        // COD のために強化されなかったことを meta に記録する。
+        // 強化子はコンポーネントに設定されたまま残る。別のコンポー
+        // ネントが時間経過で出した強化子はそのまま返す。
+        if outcome.reinforced and not from_event:
+            return outcome with meta["cod_suppressed"] = true
+        // それ以外は、この反応が COD のために強化されなかったことを
+        // meta に記録する。
         return Outcome::unreinforced_with_meta({
             "cod_suppressed": true, "operandum": operandum,
         })

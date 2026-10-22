@@ -9,7 +9,7 @@ live in Rust?" Discrepancies are surfaced explicitly as `DEFERRED`,
 `BY_DESIGN`, or `BUG` at the bottom.
 
 The Python package `contingency-py` is the authoritative executable
-specification. The 22 conformance fixtures under
+specification. The 23 conformance fixtures under
 `contingency-py/conformance/` are the bit-equivalence oracle for
 deterministic schedules; stochastic fixtures are trajectory templates
 (see `contingency-py/conformance/README.md`).
@@ -212,11 +212,11 @@ methods in the corresponding `test_*.py` file. The conformance corpus
 
 Schedule families: **31 total**. Rust covers **31 / 31** as first-class
 types. Additional Rust coverage: `tests/properties.rs` (13 proptest
-cases), `tests/conformance.rs` (14 strict + 6 ignored).
+cases), `tests/conformance.rs` (17 strict + 6 ignored).
 
 ## 4. Conformance fixture mapping
 
-All 22 JSON fixtures live under `contingency-py/conformance/`. The
+All 23 JSON fixtures live under `contingency-py/conformance/`. The
 Rust replay is in `contingency-rs/tests/conformance.rs`. Deterministic
 fixtures are asserted **bit-equivalent** on `reinforced` + every
 `Reinforcer` field (1e-9 float tolerance). Stochastic fixtures are
@@ -239,6 +239,7 @@ run via `cargo test -- --ignored` as relaxed structural checks.
 | `atomic/ri_seeded_5.json` | relaxed (`#[ignore]`) |
 | `atomic/rt_seeded_11.json` | relaxed (`#[ignore]`) |
 | `compound/concurrent_cod.json` | strict |
+| `compound/concurrent_cod_tick.json` | strict |
 | `compound/chained_fr2_fr3.json` | strict |
 | `compound/alternative_fr_ft.json` | strict |
 | `compound/multiple_fr_fr.json` | strict |
@@ -249,9 +250,9 @@ run via `cargo test -- --ignored` as relaxed structural checks.
 | `differential/drh_basic.json` | strict |
 | `progressive/pr_arithmetic.json` | strict |
 
-Totals: 22 fixtures, 14 strict + 6 relaxed + 2 newly added strict
-(`multiple_fr_fr`, `tandem_fr_fr`). Strict count matches the current
-`tests/conformance.rs` result: 14 passed, 6 ignored. The relaxation
+Totals: 23 fixtures, 17 strict + 6 relaxed. The current
+`tests/conformance.rs` result is 18 passed (the 17 strict fixtures and
+the completeness test), 6 ignored. The relaxation
 is `BY_DESIGN`: see Gotcha G11 in §5.
 
 ## 5. Semantic-invariant checklist (Gotchas 1-13 + Timeout meta)
@@ -338,10 +339,10 @@ that exercise the cross-language boundary.
 | G2 | DSL bridge. **By design** — DSL parsing remains Python-only. The Rust runtime is driven via `ScheduleBuilder`; DSL consumers go through `contingency-py`. | `BY_DESIGN` |
 | G3 | HAL layer. **Closed** — `Apparatus` trait + `VirtualApparatus` + `SerialApparatus` present. Python `HilBridgeApparatus` host-side helper is intentionally absent; see §6. | Resolved |
 | G4 | Non-Python bindings (UniFFI / WASM / cbindgen). **Closed** — all three have live symbols and E2E tests (§7). | Resolved |
-| G5 | Stochastic conformance fixtures (6 of 22) do not strict-replay because Rust `SmallRng` ≠ Python Mersenne Twister. They run relaxed via `cargo test -- --ignored`. | `BY_DESIGN` |
+| G5 | Stochastic conformance fixtures (6 of 23) do not strict-replay because Rust `SmallRng` ≠ Python Mersenne Twister. They run relaxed via `cargo test -- --ignored`. | `BY_DESIGN` |
 | G7 | `NotConnectedError` flattened into `Hardware(msg)` variant. Python callers catching the specific subclass must string-match the message. | `BY_DESIGN` |
 | G9 | **Aversive and trial-based schedule families ported.** Rust `src/schedules/aversive.rs` (`Sidman`, `DiscriminatedAvoidance`, `Escape`) and `src/schedules/trial_based.rs` (`MatchingToSample`, `GoNoGo`) now exist. | Resolved |
-| G10 | `Multiple` and `Tandem` conformance fixtures (`multiple_fr_fr`, `tandem_fr_fr`). **Closed** — both landed; total strict fixtures now 14. | Resolved |
+| G10 | `Multiple` and `Tandem` conformance fixtures (`multiple_fr_fr`, `tandem_fr_fr`). **Closed** — both landed. | Resolved |
 | G11 | Python unit-test counts exceed Rust counts (~60% of Python), mostly due to `hypothesis` property tests (Rust covers a subset via `proptest`) and one-liner error-input enumerations. No functional gap. | Informational |
 
 **BUG-severity items: 0.** No invariant from §5 is violated. All 31

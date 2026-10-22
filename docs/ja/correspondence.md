@@ -9,7 +9,7 @@
 明示する。
 
 Python パッケージ `contingency-py` が executable specification の
-正典である。`contingency-py/conformance/` 配下の 22 個の conformance
+正典である。`contingency-py/conformance/` 配下の 23 個の conformance
 fixture が、決定的スケジュールに対する bit 等価性のオラクルとなる。
 確率的 fixture は trajectory template として扱われる
 （`contingency-py/conformance/README.md` 参照）。
@@ -211,11 +211,11 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 スケジュール family の合計：**31**。Rust は **31 / 31** をすべて
 ファーストクラス型としてカバー。追加の Rust カバレッジ：
 `tests/properties.rs` (proptest 13 ケース)、
-`tests/conformance.rs`（strict 14 + ignored 6）。
+`tests/conformance.rs`（strict 17 + ignored 6）。
 
 ## 4. Conformance fixture マッピング
 
-22 個の JSON fixture はすべて `contingency-py/conformance/` 配下に
+23 個の JSON fixture はすべて `contingency-py/conformance/` 配下に
 ある。Rust 側のリプレイは `contingency-rs/tests/conformance.rs`。
 決定的な fixture は `reinforced` および `Reinforcer` の各フィールドに
 対して **bit 等価** で検証する（浮動小数点許容差は 1e-9）。
@@ -238,6 +238,7 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 | `atomic/ri_seeded_5.json` | relaxed (`#[ignore]`) |
 | `atomic/rt_seeded_11.json` | relaxed (`#[ignore]`) |
 | `compound/concurrent_cod.json` | strict |
+| `compound/concurrent_cod_tick.json` | strict |
 | `compound/chained_fr2_fr3.json` | strict |
 | `compound/alternative_fr_ft.json` | strict |
 | `compound/multiple_fr_fr.json` | strict |
@@ -248,9 +249,9 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 | `differential/drh_basic.json` | strict |
 | `progressive/pr_arithmetic.json` | strict |
 
-合計：fixture 22、strict 14 + relaxed 6 + 新規追加の strict 2
-（`multiple_fr_fr`、`tandem_fr_fr`）。strict の数は現在の
-`tests/conformance.rs` の結果（passed 14、ignored 6）と一致する。
+合計：fixture 23、strict 17 + relaxed 6。現在の
+`tests/conformance.rs` の結果は passed 18（strict の fixture 17 と
+網羅性テスト）、ignored 6。
 relaxed 化は `BY_DESIGN`（§5 Gotcha G11 参照）。
 
 ## 5. セマンティック不変条件チェックリスト（Gotchas 1-13 + Timeout meta）
@@ -336,10 +337,10 @@ Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）�
 | G2 | DSL ブリッジ。**By design** — DSL のパースは Python 専用のまま。Rust ランタイムは `ScheduleBuilder` で駆動し、DSL コンシューマは `contingency-py` 経由で利用する。 | `BY_DESIGN` |
 | G3 | HAL レイヤ。**Closed** — `Apparatus` トレイト + `VirtualApparatus` + `SerialApparatus` 完備。Python の `HilBridgeApparatus` ホスト側ヘルパは意図的に未提供（§6 参照）。 | Resolved |
 | G4 | 非 Python バインディング（UniFFI / WASM / cbindgen）。**Closed** — 3 つともライブシンボルと E2E テストあり（§7）。 | Resolved |
-| G5 | 確率的 conformance fixture（22 中 6）は Rust `SmallRng` ≠ Python Mersenne Twister のため strict リプレイできない。`cargo test -- --ignored` で relaxed 実行可能。 | `BY_DESIGN` |
+| G5 | 確率的 conformance fixture（23 中 6）は Rust `SmallRng` ≠ Python Mersenne Twister のため strict リプレイできない。`cargo test -- --ignored` で relaxed 実行可能。 | `BY_DESIGN` |
 | G7 | `NotConnectedError` を `Hardware(msg)` variant にフラット化。Python の specific subclass を catch していた呼び出し側はメッセージ文字列マッチが必要。 | `BY_DESIGN` |
 | G9 | **嫌悪系および試行ベース系を移植済み。** Rust の `src/schedules/aversive.rs`（`Sidman`, `DiscriminatedAvoidance`, `Escape`）と `src/schedules/trial_based.rs`（`MatchingToSample`, `GoNoGo`）が存在。 | Resolved |
-| G10 | `Multiple` および `Tandem` の conformance fixture（`multiple_fr_fr`, `tandem_fr_fr`）。**Closed** — 両方追加済み、strict fixture 合計 14。 | Resolved |
+| G10 | `Multiple` および `Tandem` の conformance fixture（`multiple_fr_fr`, `tandem_fr_fr`）。**Closed** — 両方追加済み。 | Resolved |
 | G11 | Python ユニットテスト件数が Rust 件数を上回る（おおよそ 60%）。主因は `hypothesis` の property test（Rust は `proptest` で部分カバー）と一行で書かれたエラー入力の列挙。機能的乖離はない。 | Informational |
 
 **BUG severity: 0 件。** §5 の不変条件はいずれも違反なし。31 family

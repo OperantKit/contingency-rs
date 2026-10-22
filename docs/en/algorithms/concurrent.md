@@ -33,7 +33,10 @@ ends, and B's component does not start its next interval (or ratio)
 until that delivery. Switching away from B during the COD keeps the
 reinforcer on B. This is the procedure of Herrnstein (1961): no
 response was reinforced within 1.5 s of a changeover, and the
-programmed reinforcer stayed available until collected.
+programmed reinforcer stayed available until collected. If another
+component delivers a reinforcer on its tick at the step where B's
+reinforcer is held and no punisher fires, that reinforcer is still
+returned.
 
 ### Fixed-Ratio Changeover (FRCO)
 
@@ -82,8 +85,12 @@ fn step(now, event):
         outcome, from_event = deliver_pending(operandum, now, outcome, from_event)
 
     if held:
-        // The reinforcer stays set up on the component; meta records
-        // that this response was not reinforced because of the COD.
+        // The reinforcer stays set up on the component. A reinforcer
+        // another component delivered on its tick is still returned.
+        if outcome.reinforced and not from_event:
+            return outcome with meta["cod_suppressed"] = true
+        // Otherwise meta records that this response was not
+        // reinforced because of the COD.
         return Outcome::unreinforced_with_meta({
             "cod_suppressed": true, "operandum": operandum,
         })
