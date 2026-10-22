@@ -501,6 +501,11 @@ fn compound_chained_fr2_fr3() {
 }
 
 #[test]
+fn compound_chained_fr2_fi5() {
+    run_fixture("compound/chained_fr2_fi5.json");
+}
+
+#[test]
 fn compound_alternative_fr_ft() {
     run_fixture("compound/alternative_fr_ft.json");
 }

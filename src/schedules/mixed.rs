@@ -8,8 +8,10 @@
 //! meta) tracks the active component.
 //!
 //! Inactive components are not stepped — only the active component
-//! receives `(now, event)`. On reinforcement the active index
-//! advances (wrapping to 0 after the last component).
+//! receives `(now, event)`, and each component runs on its own clock
+//! that stops while it is inactive (as in [`Multiple`](super::Multiple)).
+//! On reinforcement the active index advances (wrapping to 0 after the
+//! last component).
 //!
 //! # References
 //!
@@ -19,6 +21,7 @@
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
+use crate::schedules::sequence::ComponentClocks;
 use crate::types::{MetaValue, Outcome, ResponseEvent};
 use crate::Result;
 
@@ -32,6 +35,7 @@ pub struct Mixed {
     components: Vec<Box<dyn Schedule>>,
     active: usize,
     last_now: Option<f64>,
+    clocks: ComponentClocks,
 }
 
 impl std::fmt::Debug for Mixed {
@@ -53,10 +57,12 @@ impl Mixed {
                 components.len()
             )));
         }
+        let clocks = ComponentClocks::new(components.len());
         Ok(Self {
             components,
             active: 0,
             last_now: None,
+            clocks,
         })
     }
 
@@ -78,7 +84,9 @@ impl Schedule for Mixed {
         self.last_now = Some(now);
 
         let current = self.active;
-        let inner = self.components[current].step(now, event)?;
+        let inner = self
+            .clocks
+            .step(current, self.components[current].as_mut(), now, event)?;
 
         let mut meta = inner.meta.clone();
         meta.insert(
@@ -87,7 +95,9 @@ impl Schedule for Mixed {
         );
 
         if inner.reinforced {
-            self.active = (self.active + 1) % self.components.len();
+            let next = (self.active + 1) % self.components.len();
+            self.clocks.switch(self.active, next, now);
+            self.active = next;
             return Ok(Outcome {
                 reinforced: true,
                 reinforcer: inner.reinforcer,
@@ -104,6 +114,7 @@ impl Schedule for Mixed {
     fn reset(&mut self) {
         self.active = 0;
         self.last_now = None;
+        self.clocks.reset();
         for c in self.components.iter_mut() {
             c.reset();
         }
@@ -233,6 +244,22 @@ mod tests {
         assert_eq!(m.active_index(), 1);
         assert!(!respond(&mut m, 4.0).reinforced);
         assert!(respond(&mut m, 5.0).reinforced);
+    }
+
+    #[test]
+    fn fi_component_clock_pauses_while_inactive() {
+        let mut m = Mixed::new(vec![
+            Box::new(crate::schedules::FI::new(10.0).unwrap()),
+            Box::new(FR::new(20).unwrap()),
+        ])
+        .unwrap();
+        // FI from 0 -> SR+ at 10; FR 20 at 11..30; FI resumes at 31 with
+        // 10 s already used -> SR+ at 41.
+        let times: Vec<f64> = (0..=45)
+            .map(f64::from)
+            .filter(|&t| respond(&mut m, t).reinforced)
+            .collect();
+        assert_eq!(times, vec![10.0, 30.0, 41.0]);
     }
 
     // --- Meta ----------------------------------------------------------

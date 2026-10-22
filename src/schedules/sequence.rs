@@ -24,11 +24,21 @@
 //! Inactive components are *not* stepped. Only the active component
 //! receives [`Schedule::step`] calls. This matches the operant-chamber
 //! convention that inactive components are "off": their clocks do not
-//! advance while another S^D is in effect. The consequence is that a
-//! newly-activated time-based schedule (FI, FT, VI, VT, RI, RT) will
-//! anchor on its first step *after* the transition, not on the moment
-//! the transition occurred — exactly as in a real operant chamber where
-//! the S^D and the clock both restart on link entry.
+//! advance while another S^D is in effect.
+//!
+//! Each component therefore runs on its own clock, which advances only
+//! while that component is active. The compound translates `now` into
+//! the component's clock before stepping it and translates the
+//! reinforcer time back. A newly-activated component's clock resumes on
+//! its first step *after* the transition, at the time it had accumulated
+//! while active (0 on its first activation). Time-based schedules (FI,
+//! FT, VI, VT, RI, RT, DRO) therefore count from their first step after
+//! activation — not from session start or from the component's last
+//! reinforcer — exactly as in a real operant chamber where the S^D and
+//! the clock both restart on link entry. The first component runs from
+//! time 0, as a standalone schedule does. The gap between the transition
+//! and that first step is counted by no component, so drive time-based
+//! links with a step grid fine enough for the intended timing.
 //!
 //! # References
 //!
@@ -93,6 +103,71 @@ fn validate_stimuli(stimuli: Option<Vec<String>>, n_components: usize) -> Result
 }
 
 // ---------------------------------------------------------------------
+// Per-component clocks
+// ---------------------------------------------------------------------
+
+/// Per-component clocks that stop while a component is inactive.
+///
+/// A component's local time is `now - offset`. When a component is
+/// entered, its clock stays stopped until the component's first step,
+/// and resumes there at the local time it had when it was last left (0
+/// for a component that has never run). The first component runs from
+/// time 0, as a standalone schedule does.
+#[derive(Debug, Clone)]
+pub(crate) struct ComponentClocks {
+    offsets: Vec<f64>,
+    stopped: Vec<f64>,
+    pending: Vec<bool>,
+}
+
+impl ComponentClocks {
+    pub(crate) fn new(n: usize) -> Self {
+        Self {
+            offsets: vec![0.0; n],
+            stopped: vec![0.0; n],
+            pending: vec![false; n],
+        }
+    }
+
+    /// Step `component` (at `index`) on its own clock and map the
+    /// reinforcer time back to `now`.
+    pub(crate) fn step(
+        &mut self,
+        index: usize,
+        component: &mut dyn Schedule,
+        now: f64,
+        event: Option<&ResponseEvent>,
+    ) -> Result<Outcome> {
+        if self.pending[index] {
+            self.offsets[index] = now - self.stopped[index];
+            self.pending[index] = false;
+        }
+        let local = now - self.offsets[index];
+        let local_event = event.map(|e| ResponseEvent {
+            time: local,
+            operandum: e.operandum.clone(),
+        });
+        let mut inner = component.step(local, local_event.as_ref())?;
+        if let Some(r) = inner.reinforcer.as_mut() {
+            r.time = now;
+        }
+        Ok(inner)
+    }
+
+    /// Stop `leaving`'s clock at `now` and mark `entering` to resume on
+    /// its next step.
+    pub(crate) fn switch(&mut self, leaving: usize, entering: usize, now: f64) {
+        self.stopped[leaving] = now - self.offsets[leaving];
+        self.pending[entering] = true;
+    }
+
+    pub(crate) fn reset(&mut self) {
+        let n = self.offsets.len();
+        *self = Self::new(n);
+    }
+}
+
+// ---------------------------------------------------------------------
 // Multiple
 // ---------------------------------------------------------------------
 
@@ -124,6 +199,7 @@ pub struct Multiple {
     stimuli: Vec<String>,
     active_index: usize,
     last_now: Option<f64>,
+    clocks: ComponentClocks,
 }
 
 impl fmt::Debug for Multiple {
@@ -151,11 +227,13 @@ impl Multiple {
     pub fn new(components: Vec<Box<dyn Schedule>>, stimuli: Option<Vec<String>>) -> Result<Self> {
         validate_components(&components)?;
         let stimuli = validate_stimuli(stimuli, components.len())?;
+        let clocks = ComponentClocks::new(components.len());
         Ok(Self {
             components,
             stimuli,
             active_index: 0,
             last_now: None,
+            clocks,
         })
     }
 
@@ -175,6 +253,15 @@ impl Multiple {
     }
 }
 
+impl Multiple {
+    /// Make `index` the active component, stopping the leaving
+    /// component's clock at `now`.
+    fn enter(&mut self, index: usize, now: f64) {
+        self.clocks.switch(self.active_index, index, now);
+        self.active_index = index;
+    }
+}
+
 impl Schedule for Multiple {
     fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome> {
         check_time(now, self.last_now)?;
@@ -182,11 +269,16 @@ impl Schedule for Multiple {
         self.last_now = Some(now);
 
         let stim_before = self.stimuli[self.active_index].clone();
-        let inner = self.components[self.active_index].step(now, event)?;
+        let inner = self.clocks.step(
+            self.active_index,
+            self.components[self.active_index].as_mut(),
+            now,
+            event,
+        )?;
 
         if inner.reinforced {
             // Primary reinforcement; then advance (wrap) for the next step.
-            self.active_index = (self.active_index + 1) % self.components.len();
+            self.enter((self.active_index + 1) % self.components.len(), now);
             let mut meta = inner.meta.clone();
             meta.insert("current_component".to_string(), MetaValue::Str(stim_before));
             return Ok(Outcome {
@@ -208,6 +300,7 @@ impl Schedule for Multiple {
     fn reset(&mut self) {
         self.active_index = 0;
         self.last_now = None;
+        self.clocks.reset();
         for c in self.components.iter_mut() {
             c.reset();
         }
@@ -250,6 +343,7 @@ pub struct Chained {
     stimuli: Vec<String>,
     active_index: usize,
     last_now: Option<f64>,
+    clocks: ComponentClocks,
 }
 
 impl fmt::Debug for Chained {
@@ -277,11 +371,13 @@ impl Chained {
     pub fn new(components: Vec<Box<dyn Schedule>>, stimuli: Option<Vec<String>>) -> Result<Self> {
         validate_components(&components)?;
         let stimuli = validate_stimuli(stimuli, components.len())?;
+        let clocks = ComponentClocks::new(components.len());
         Ok(Self {
             components,
             stimuli,
             active_index: 0,
             last_now: None,
+            clocks,
         })
     }
 
@@ -306,19 +402,33 @@ impl Chained {
     }
 }
 
+impl Chained {
+    /// Make `index` the active component, stopping the leaving
+    /// component's clock at `now`.
+    fn enter(&mut self, index: usize, now: f64) {
+        self.clocks.switch(self.active_index, index, now);
+        self.active_index = index;
+    }
+}
+
 impl Schedule for Chained {
     fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome> {
         check_time(now, self.last_now)?;
         check_event(now, event)?;
         self.last_now = Some(now);
 
-        let inner = self.components[self.active_index].step(now, event)?;
+        let inner = self.clocks.step(
+            self.active_index,
+            self.components[self.active_index].as_mut(),
+            now,
+            event,
+        )?;
 
         if inner.reinforced {
             let terminal = self.is_terminal();
             if terminal {
                 // Primary reinforcement; cycle back to link 0.
-                self.active_index = 0;
+                self.enter(0, now);
                 let mut meta = inner.meta.clone();
                 meta.insert(
                     "current_component".to_string(),
@@ -332,7 +442,7 @@ impl Schedule for Chained {
             }
             // Non-terminal completion: conditioned reinforcement =
             // transition to next link; no primary reinforcer.
-            self.active_index += 1;
+            self.enter(self.active_index + 1, now);
             let mut meta = inner.meta.clone();
             meta.insert(
                 "current_component".to_string(),
@@ -361,6 +471,7 @@ impl Schedule for Chained {
     fn reset(&mut self) {
         self.active_index = 0;
         self.last_now = None;
+        self.clocks.reset();
         for c in self.components.iter_mut() {
             c.reset();
         }
@@ -405,6 +516,7 @@ pub struct Tandem {
     components: Vec<Box<dyn Schedule>>,
     active_index: usize,
     last_now: Option<f64>,
+    clocks: ComponentClocks,
 }
 
 impl fmt::Debug for Tandem {
@@ -425,10 +537,12 @@ impl Tandem {
     /// Returns [`ContingencyError::Config`] if `components.len() < 2`.
     pub fn new(components: Vec<Box<dyn Schedule>>) -> Result<Self> {
         validate_components(&components)?;
+        let clocks = ComponentClocks::new(components.len());
         Ok(Self {
             components,
             active_index: 0,
             last_now: None,
+            clocks,
         })
     }
 
@@ -448,18 +562,32 @@ impl Tandem {
     }
 }
 
+impl Tandem {
+    /// Make `index` the active component, stopping the leaving
+    /// component's clock at `now`.
+    fn enter(&mut self, index: usize, now: f64) {
+        self.clocks.switch(self.active_index, index, now);
+        self.active_index = index;
+    }
+}
+
 impl Schedule for Tandem {
     fn step(&mut self, now: f64, event: Option<&ResponseEvent>) -> Result<Outcome> {
         check_time(now, self.last_now)?;
         check_event(now, event)?;
         self.last_now = Some(now);
 
-        let inner = self.components[self.active_index].step(now, event)?;
+        let inner = self.clocks.step(
+            self.active_index,
+            self.components[self.active_index].as_mut(),
+            now,
+            event,
+        )?;
 
         if inner.reinforced {
             let terminal = self.is_terminal();
             if terminal {
-                self.active_index = 0;
+                self.enter(0, now);
                 let mut meta = inner.meta.clone();
                 meta.insert(
                     "current_component".to_string(),
@@ -471,7 +599,7 @@ impl Schedule for Tandem {
                     meta,
                 });
             }
-            self.active_index += 1;
+            self.enter(self.active_index + 1, now);
             let mut meta = inner.meta.clone();
             meta.insert(
                 "current_component".to_string(),
@@ -500,6 +628,7 @@ impl Schedule for Tandem {
     fn reset(&mut self) {
         self.active_index = 0;
         self.last_now = None;
+        self.clocks.reset();
         for c in self.components.iter_mut() {
             c.reset();
         }
@@ -964,6 +1093,86 @@ mod tests {
         let ev = ResponseEvent::new(2.0);
         let err = t.step(1.0, Some(&ev)).unwrap_err();
         assert!(matches!(err, ContingencyError::State(_)));
+    }
+
+    // ----- Time-based link anchor -------------------------------------
+    //
+    // Time-based links count from their first step after activation. A
+    // component's clock stops while it is inactive, so neither session
+    // time nor time spent in other links counts toward its interval.
+
+    fn fi(interval: f64) -> Box<dyn Schedule> {
+        Box::new(crate::schedules::FI::new(interval).unwrap())
+    }
+
+    /// Respond once per second from t=0 to `until` and collect SR+ times.
+    fn reinforcement_times(s: &mut dyn Schedule, until: u32) -> Vec<f64> {
+        (0..=until)
+            .map(f64::from)
+            .filter(|&t| respond(s, t).reinforced)
+            .collect()
+    }
+
+    #[test]
+    fn chained_fi_terminal_counts_from_link_entry() {
+        let mut c =
+            Chained::new(vec![fr(5), fi(30.0)], Some(vec!["s0".into(), "s1".into()])).unwrap();
+        // FR 5 completes at t=4; FI link first stepped at 5 -> SR+ at 35.
+        // FR 5 again at 36..40; FI link first stepped at 41 -> SR+ at 71.
+        assert_eq!(reinforcement_times(&mut c, 75), vec![35.0, 71.0]);
+    }
+
+    #[test]
+    fn tandem_fi_terminal_counts_from_link_entry() {
+        let mut t = Tandem::new(vec![fr(5), fi(30.0)]).unwrap();
+        assert_eq!(reinforcement_times(&mut t, 75), vec![35.0, 71.0]);
+    }
+
+    #[test]
+    fn chained_ft_terminal_counts_from_link_entry() {
+        let mut c =
+            Chained::new(vec![fr(5), ft(10.0)], Some(vec!["s0".into(), "s1".into()])).unwrap();
+        let mut out = Vec::new();
+        for i in 0..40 {
+            let t = f64::from(i);
+            // Respond only while link 0 is active, tick otherwise.
+            let ev = ResponseEvent::new(t);
+            let ev = if c.active_index() == 0 {
+                Some(&ev)
+            } else {
+                None
+            };
+            if c.step(t, ev).unwrap().reinforced {
+                out.push(t);
+            }
+        }
+        // FT link first stepped at 5 -> SR+ at 15; FR 5 at 16..20;
+        // FT link first stepped at 21 -> SR+ at 31.
+        assert_eq!(out, vec![15.0, 31.0]);
+    }
+
+    #[test]
+    fn multiple_fi_component_clock_pauses_while_inactive() {
+        let mut m =
+            Multiple::new(vec![fi(10.0), fr(20)], Some(vec!["a".into(), "b".into()])).unwrap();
+        // FI from 0 -> SR+ at 10; FR 20 at 11..30; FI resumes at 31 with
+        // 10 s already used -> SR+ at 41.
+        assert_eq!(reinforcement_times(&mut m, 45), vec![10.0, 30.0, 41.0]);
+    }
+
+    #[test]
+    fn chained_escape_link_delivers_onset_on_entry() {
+        let mut c = Chained::new(
+            vec![
+                fr(1),
+                Box::new(crate::schedules::Escape::new(5.0, 10.0, 1.0).unwrap()),
+            ],
+            Some(vec!["s0".into(), "s1".into()]),
+        )
+        .unwrap();
+        respond(&mut c, 0.0);
+        let o = c.step(1.0, None).unwrap();
+        assert_eq!(meta_str(&o, "aversive_event"), Some("shock_onset"));
     }
 
     // ----- Config errors ------------------------------------------------

@@ -21,9 +21,17 @@ All three compose `N >= 2` component schedules and expose the same
 component reinforces.
 
 **Inactive components are not stepped.** Only the active component
-receives `step()` calls. Time-based inner schedules therefore anchor
-at their **first step after activation**, exactly as in a real
-operant chamber where S^D and clock both restart on link entry.
+receives `step()` calls. Each component runs on its own clock, which
+advances only while that component is active: the compound passes the
+component its own time and maps the reinforcer time back. A newly
+activated component's clock resumes on its **first step after
+activation**, at the time it had accumulated while active (0 on its
+first activation). Time-based inner schedules therefore anchor at
+their first step after activation — not at session start or at the
+component's last reinforcer — exactly as in a real operant chamber
+where S^D and clock both restart on link entry. The gap between the
+transition and that first step is counted by no component, so drive
+time-based links with a step grid fine enough for the intended timing.
 
 ## `Multiple` (`mult`)
 
