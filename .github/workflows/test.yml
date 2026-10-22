@@ -1,0 +1,71 @@
+# Clean-clone CI: check formatting and run cargo test (unit, integration and
+# doc tests) on the stable toolchain.
+#
+# Not run here: the WebAssembly end-to-end test (tests/e2e_wasm.rs) needs
+# wasm-pack, node and the wasm32-unknown-unknown target, and soft-skips when
+# they are missing; the PyO3, UniFFI and serial tests only compile with the
+# `python`, `uniffi` and `serial` features. Installing those tools and
+# building those features would make every run much heavier, so this
+# workflow runs the default feature set only.
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: cargo fmt --check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+          components: rustfmt
+
+      - name: cargo fmt --check
+        run: cargo fmt --check
+
+  cargo-test:
+    name: cargo test (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: [stable]
+        experimental: [false]
+        include:
+          # Oldest toolchain that resolves Cargo.lock (AGENTS.md). Optional:
+          # a failure here does not fail the workflow.
+          - toolchain: "1.85"
+            experimental: true
+    continue-on-error: ${{ matrix.experimental }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # tests/conformance.rs reads the fixtures in ../contingency-py/conformance.
+      - name: Check out contingency-py next to this crate (conformance fixtures)
+        run: git clone --depth 1 https://github.com/OperantKit/contingency-py "$GITHUB_WORKSPACE/../contingency-py"
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
+
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+
+      # Includes the doc tests of the library crate.
+      - name: cargo test
+        run: cargo test
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
