@@ -3,14 +3,16 @@
 //! Loads each JSON fixture under `../contingency-py/conformance/` and
 //! replays its event sequence against the Rust `contingency` runtime.
 //!
-//! Deterministic fixtures (FR, FI, FT, CRF, EXT, LimitedHold-wrapping-FI,
-//! Concurrent with COD, Chained, Alternative with FR+FT, DRO resetting
-//! and momentary, DRL, DRH, ProgressiveRatio arithmetic) are asserted
-//! **bit-equivalent** against Python observed outcomes: both
-//! `Outcome.reinforced` and (when reinforced) every field of the
-//! `Reinforcer` must match within a 1e-9 float tolerance.
+//! Deterministic fixtures (atomic, compound, differential, progressive,
+//! wrapper — Timeout / ResponseCost — and aversive — Sidman /
+//! DiscriminatedAvoidance / Escape) are asserted **bit-equivalent**
+//! against Python observed outcomes: both `Outcome.reinforced` and
+//! (when reinforced) the `Reinforcer` time, magnitude and label must
+//! match within a 1e-9 float tolerance. `Outcome.meta` is not compared.
 //!
-//! Stochastic fixtures (seeded VR, VI, RI, RR, VT, RT) cannot be
+//! Stochastic fixtures (seeded VR, VI, RI, RR, VT, RT, and the
+//! trial-based MatchingToSample / GoNoGo, whose correct comparison and
+//! trial type are PRNG draws) cannot be
 //! bit-reproduced because Python's Mersenne Twister and Rust's
 //! `SmallRng` are different PRNGs. The Python conformance README labels
 //! these as "trajectory templates." For Rust, the stochastic fixture
@@ -26,7 +28,7 @@
 //! through [`run_fixture`]. That obligation is enforced mechanically by
 //! `conformance_corpus_completeness`, which walks the corpus, classifies
 //! each fixture (a fixture is *stochastic* iff its schedule subtree
-//! contains any seeded type `VR`/`VI`/`RI`/`RR`/`VT`/`RT`), and fails if
+//! contains any type in [`STOCHASTIC_TYPES`]), and fails if
 //! any deterministic fixture lacks a `run_fixture(...)` call. A newly
 //! generated deterministic fixture therefore cannot land un-replayed,
 //! and commenting out a `run_fixture(...)` line trips the same guard.
@@ -46,9 +48,11 @@ use indexmap::IndexMap;
 use serde::Deserialize;
 
 use contingency::schedules::{
-    arithmetic, crf, geometric, richardson_roberts, Alternative, Chained, Concurrent, DroMode,
-    LimitedHold, Multiple, ProgressiveRatio, Tandem, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT,
-    VI, VR, VT,
+    arithmetic, crf, geometric, richardson_roberts, AdjustingSchedule, AdjustingTarget,
+    Alternative, Chained, Concurrent, Conjunctive, DiscriminatedAvoidance, DroMode, Escape, GoNoGo,
+    InterlockingSchedule, Interpolate, LimitedHold, MatchingToSample, Mixed, Multiple, Overlay,
+    Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost, SecondOrder,
+    Sidman, Tandem, Timeout, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
 };
 use contingency::{Outcome, Reinforcer, ResponseEvent, Schedule};
 
@@ -253,6 +257,161 @@ fn build_schedule(spec: &ScheduleSpec) -> Box<dyn Schedule> {
             };
             Box::new(ProgressiveRatio::new(step_fn))
         }
+        "Timeout" => {
+            let inner = build_schedule(&inner_spec(params, "inner"));
+            let duration = require_f64(params, "duration");
+            let reset_on_response = optional_bool(params, "reset_on_response").unwrap_or(false);
+            Box::new(Timeout::new(inner, duration, reset_on_response).expect("Timeout params"))
+        }
+        "ResponseCost" => {
+            let inner = build_schedule(&inner_spec(params, "inner"));
+            let amount = require_f64(params, "amount");
+            let unit = params
+                .get("unit")
+                .and_then(|v| v.as_str())
+                .unwrap_or("token")
+                .to_string();
+            let initial_balance = optional_f64(params, "initial_balance");
+            Box::new(
+                ResponseCost::new(inner, amount, unit, initial_balance)
+                    .expect("ResponseCost params"),
+            )
+        }
+        "Conjunctive" => {
+            let first = build_schedule(&inner_spec(params, "first"));
+            let second = build_schedule(&inner_spec(params, "second"));
+            Box::new(Conjunctive::new(first, second).expect("Conjunctive params"))
+        }
+        "Mixed" => {
+            let components = build_component_list(params);
+            Box::new(Mixed::new(components).expect("Mixed params"))
+        }
+        "InterlockingSchedule" => {
+            let initial_ratio = require_u64(params, "initial_ratio");
+            let decay_time = require_f64(params, "decay_time");
+            Box::new(
+                InterlockingSchedule::new(initial_ratio, decay_time)
+                    .expect("InterlockingSchedule params"),
+            )
+        }
+        "AdjustingSchedule" => {
+            let target = match require_str(params, "target") {
+                "ratio" => AdjustingTarget::Ratio,
+                "interval" => AdjustingTarget::Interval,
+                other => panic!("unsupported AdjustingSchedule target: {other}"),
+            };
+            let start = require_f64(params, "start");
+            let step = require_f64(params, "step");
+            let minimum = optional_f64(params, "minimum");
+            let maximum = optional_f64(params, "maximum");
+            Box::new(
+                AdjustingSchedule::new(target, start, step, minimum, maximum)
+                    .expect("AdjustingSchedule params"),
+            )
+        }
+        "Interpolate" => {
+            let base = build_schedule(&inner_spec(params, "base"));
+            let probe = build_schedule(&inner_spec(params, "probe"));
+            let interval = require_f64(params, "interval");
+            let probe_duration = require_f64(params, "probe_duration");
+            let first_probe_at = optional_f64(params, "first_probe_at");
+            Box::new(
+                Interpolate::new(base, probe, interval, probe_duration, first_probe_at)
+                    .expect("Interpolate params"),
+            )
+        }
+        "Overlay" => {
+            let base = build_schedule(&inner_spec(params, "base"));
+            let punisher = build_schedule(&inner_spec(params, "punisher"));
+            Box::new(Overlay::new(base, punisher).expect("Overlay params"))
+        }
+        "Percentile" => {
+            let target = match require_str(params, "target") {
+                "irt" => PercentileTarget::Irt,
+                other => panic!("unsupported Percentile target: {other}"),
+            };
+            let direction = match params
+                .get("direction")
+                .and_then(|v| v.as_str())
+                .unwrap_or("above")
+            {
+                "above" => PercentileDirection::Above,
+                "below" => PercentileDirection::Below,
+                other => panic!("unsupported Percentile direction: {other}"),
+            };
+            let rank = u8::try_from(require_u64(params, "rank")).expect("Percentile rank fits u8");
+            let window = require_u64(params, "window") as usize;
+            Box::new(Percentile::new(target, rank, window, direction).expect("Percentile params"))
+        }
+        "SecondOrder" => {
+            let overall = build_schedule(&inner_spec(params, "overall"));
+            let unit = build_schedule(&inner_spec(params, "unit"));
+            Box::new(SecondOrder::new(overall, unit))
+        }
+        "Sidman" => {
+            let ssi = require_f64(params, "shock_shock_interval");
+            let rsi = require_f64(params, "response_shock_interval");
+            let magnitude = optional_f64(params, "shock_magnitude").unwrap_or(1.0);
+            Box::new(Sidman::new(ssi, rsi, magnitude).expect("Sidman params"))
+        }
+        "DiscriminatedAvoidance" => {
+            let warning_duration = require_f64(params, "warning_duration");
+            let iti = require_f64(params, "iti");
+            let magnitude = optional_f64(params, "shock_magnitude").unwrap_or(1.0);
+            Box::new(
+                DiscriminatedAvoidance::new(warning_duration, iti, magnitude)
+                    .expect("DiscriminatedAvoidance params"),
+            )
+        }
+        "Escape" => {
+            let trial_duration = require_f64(params, "trial_duration");
+            let iti = require_f64(params, "iti");
+            let magnitude = optional_f64(params, "shock_magnitude").unwrap_or(1.0);
+            Box::new(Escape::new(trial_duration, iti, magnitude).expect("Escape params"))
+        }
+        "MatchingToSample" => {
+            let n_comparisons = u32::try_from(require_u64(params, "n_comparisons"))
+                .expect("n_comparisons fits u32");
+            let sample_duration = optional_f64(params, "sample_duration").unwrap_or(0.0);
+            let choice_timeout = optional_f64(params, "choice_timeout").unwrap_or(5.0);
+            let consequence = optional_schedule(params, "consequence");
+            let incorrect = optional_schedule(params, "incorrect");
+            let iti = optional_f64(params, "iti").unwrap_or(1.0);
+            let seed = optional_u64(params, "seed");
+            Box::new(
+                MatchingToSample::new(
+                    n_comparisons,
+                    sample_duration,
+                    choice_timeout,
+                    consequence,
+                    incorrect,
+                    iti,
+                    seed,
+                )
+                .expect("MatchingToSample params"),
+            )
+        }
+        "GoNoGo" => {
+            let go_probability = optional_f64(params, "go_probability").unwrap_or(0.5);
+            let response_window = optional_f64(params, "response_window").unwrap_or(5.0);
+            let iti = optional_f64(params, "iti").unwrap_or(5.0);
+            let correct_go = optional_schedule(params, "correct_go_schedule");
+            let correct_nogo = optional_schedule(params, "correct_nogo_schedule");
+            let false_alarm = optional_schedule(params, "false_alarm");
+            let seed = optional_u64(params, "seed");
+            Box::new(
+                GoNoGo::new(
+                    go_probability,
+                    response_window,
+                    iti,
+                    correct_go,
+                    correct_nogo,
+                    false_alarm,
+                    seed,
+                )
+                .expect("GoNoGo params"),
+            )
+        }
         other => panic!("unsupported schedule type in fixture: {other}"),
     }
 }
@@ -319,6 +478,30 @@ fn require_u64(params: &serde_json::Value, key: &str) -> u64 {
         .get(key)
         .and_then(|v| v.as_u64())
         .unwrap_or_else(|| panic!("missing or non-integer param: {key}"))
+}
+
+fn require_str<'a>(params: &'a serde_json::Value, key: &str) -> &'a str {
+    params
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or_else(|| panic!("missing or non-string param: {key}"))
+}
+
+fn optional_bool(params: &serde_json::Value, key: &str) -> Option<bool> {
+    params.get(key).and_then(|v| v.as_bool())
+}
+
+/// A nested schedule spec that may be absent or JSON `null` (both map
+/// to `None`, matching `_optional_spec` on the Python side).
+fn optional_schedule(params: &serde_json::Value, key: &str) -> Option<Box<dyn Schedule>> {
+    match params.get(key) {
+        None | Some(serde_json::Value::Null) => None,
+        Some(v) => {
+            let spec: ScheduleSpec = serde_json::from_value(v.clone())
+                .unwrap_or_else(|e| panic!("nested spec {key} deserialize error: {e}"));
+            Some(build_schedule(&spec))
+        }
+    }
 }
 
 fn optional_f64(params: &serde_json::Value, key: &str) -> Option<f64> {
@@ -545,6 +728,71 @@ fn progressive_pr_arithmetic() {
     run_fixture("progressive/pr_arithmetic.json");
 }
 
+#[test]
+fn progressive_interlocking_r4_t8() {
+    run_fixture("progressive/interlocking_r4_t8.json");
+}
+
+#[test]
+fn progressive_adjusting_ratio_s2_max3() {
+    run_fixture("progressive/adjusting_ratio_s2_max3.json");
+}
+
+#[test]
+fn compound_mixed_fr2_fr3() {
+    run_fixture("compound/mixed_fr2_fr3.json");
+}
+
+#[test]
+fn compound_conjunctive_fr3_fi5() {
+    run_fixture("compound/conjunctive_fr3_fi5.json");
+}
+
+#[test]
+fn compound_interpolate_fr2_ext() {
+    run_fixture("compound/interpolate_fr2_ext.json");
+}
+
+#[test]
+fn compound_overlay_fr2_fr3() {
+    run_fixture("compound/overlay_fr2_fr3.json");
+}
+
+#[test]
+fn compound_second_order_fr2_fr3() {
+    run_fixture("compound/second_order_fr2_fr3.json");
+}
+
+#[test]
+fn differential_percentile_irt_r75_w3() {
+    run_fixture("differential/percentile_irt_r75_w3.json");
+}
+
+#[test]
+fn wrapper_timeout_fr2_to3() {
+    run_fixture("wrapper/timeout_fr2_to3.json");
+}
+
+#[test]
+fn wrapper_response_cost_fr2() {
+    run_fixture("wrapper/response_cost_fr2.json");
+}
+
+#[test]
+fn aversive_sidman_ssi5_rsi3() {
+    run_fixture("aversive/sidman_ssi5_rsi3.json");
+}
+
+#[test]
+fn aversive_discriminated_avoidance_w3_iti4() {
+    run_fixture("aversive/discriminated_avoidance_w3_iti4.json");
+}
+
+#[test]
+fn aversive_escape_trial3_iti2() {
+    run_fixture("aversive/escape_trial3_iti2.json");
+}
+
 // -----------------------------------------------------------------------------
 // Stochastic fixtures — ignored by default
 // -----------------------------------------------------------------------------
@@ -594,6 +842,23 @@ fn atomic_rt_seeded_11() {
     run_stochastic_fixture("atomic/rt_seeded_11.json");
 }
 
+// The trial-based fixtures draw the correct comparison (MTS) and the
+// Go/NoGo trial type from the PRNG. With a different generator the
+// recorded trajectory is a template only; the count band above is the
+// whole check.
+
+#[test]
+#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
+fn trial_mts_n2_seed7() {
+    run_stochastic_fixture("trial/mts_n2_seed7.json");
+}
+
+#[test]
+#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
+fn trial_gonogo_p05_seed1() {
+    run_stochastic_fixture("trial/gonogo_p05_seed1.json");
+}
+
 // -----------------------------------------------------------------------------
 // Completeness guard — no deterministic fixture may go un-replayed
 // -----------------------------------------------------------------------------
@@ -609,14 +874,23 @@ fn atomic_rt_seeded_11() {
 //      `run_fixture(...)` test is added for it.
 //   2. An existing `run_fixture(...)` call is removed or commented out.
 //
-// Stochastic (seeded VR/VI/RI/RR/VT/RT) fixtures are intentionally
-// exempt: they are replayed structurally via `run_stochastic_fixture`
-// under `#[ignore]`, because Rust's `SmallRng` cannot bit-reproduce
-// Python's Mersenne Twister.
+// Stochastic (seeded VR/VI/RI/RR/VT/RT, MatchingToSample, GoNoGo)
+// fixtures are intentionally exempt: they are replayed structurally via
+// `run_stochastic_fixture` under `#[ignore]`, because Rust's `SmallRng`
+// cannot bit-reproduce Python's Mersenne Twister.
 
 /// Seeded schedule types whose trajectories depend on a PRNG stream and
 /// therefore cannot be bit-reproduced across the Python/Rust boundary.
-const STOCHASTIC_TYPES: [&str; 6] = ["VR", "VI", "RI", "RR", "VT", "RT"];
+const STOCHASTIC_TYPES: [&str; 8] = [
+    "VR",
+    "VI",
+    "RI",
+    "RR",
+    "VT",
+    "RT",
+    "MatchingToSample",
+    "GoNoGo",
+];
 
 /// A fixture is stochastic iff its schedule subtree (recursively,
 /// through `components` arrays/objects, `inner`, `first`, `second`,
@@ -750,7 +1024,7 @@ fn conformance_corpus_completeness() {
          Every deterministic fixture under {} must be replayed. Add a \
          `run_fixture(\"<relative-path>\")` test for each (or, if a fixture \
          is genuinely stochastic, ensure its schedule subtree carries a \
-         seeded VR/VI/RI/RR/VT/RT type so this guard treats it as exempt).",
+         type listed in STOCHASTIC_TYPES so this guard treats it as exempt).",
         dir.display()
     );
 }
