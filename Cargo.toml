@@ -23,6 +23,7 @@ required-features = ["uniffi"]
 
 [dependencies]
 rand = { version = "0.8", features = ["small_rng"] }
+getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "1"

@@ -44,6 +44,7 @@ chronological; full provenance lives in `git log`.
 | `src/contingency/bridge/__init__.py` | *(no Rust counterpart — DSL parsing is Python-only)* | |
 | `src/contingency/helpers/__init__.py` | `src/helpers/mod.rs` | |
 | `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | Same three public entry points; see §5 Gotcha 11 for PRNG divergence. |
+| *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`: MT19937 port with Python's seeding and sampling methods (see §4). |
 | `src/contingency/schedules/__init__.py` | `src/schedules/mod.rs` | |
 | `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF` (factory). |
 | `src/contingency/schedules/interval.py` | `src/schedules/interval.rs` | `FI`, `VI`, `RI`, `LimitedHold`. |
@@ -223,6 +224,20 @@ fixtures are asserted **bit-equivalent** on `reinforced` + every
 `#[ignore]`'d because Python's Mersenne Twister and Rust's `SmallRng`
 produce different draw sequences under the same integer seed; they
 run via `cargo test -- --ignored` as relaxed structural checks.
+
+`src/helpers/py_random.rs` ports Python's PRNG: `PyRandom` is the
+MT19937 generator of CPython's `Modules/_randommodule.c`
+(`init_by_array` seeding from the integer's 32-bit words,
+`genrand_uint32`, the 53-bit `random()`, `getrandbits`) together with
+the `Lib/random.py` methods `contingency-py` calls (`randrange` via
+`_randbelow_with_getrandbits`, `expovariate` as
+`-log(1 - random()) / lambd`, back-to-front `shuffle`). Given the same
+non-negative integer seed it reproduces `random.Random(seed)` bit for
+bit; its unit tests pin sequences produced by CPython. Integer draws
+are exact on every host. `expovariate` calls the platform `log`, which
+can differ in the last bit between libm implementations (for example
+macOS arm64 and x86_64), so Rust and Python agree exactly when they
+run on the same libm.
 
 | Fixture | Mode |
 |---|---|

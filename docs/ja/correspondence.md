@@ -44,6 +44,7 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 | `src/contingency/bridge/__init__.py` | *(Rust 対応なし — DSL パースは Python 専用)* | |
 | `src/contingency/helpers/__init__.py` | `src/helpers/mod.rs` | |
 | `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | 公開 API は同じ 3 つ。PRNG 乖離については §5 Gotcha 11 参照。 |
+| *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`：Python の seed の与え方と標本化メソッドを持つ MT19937 の移植（§4 参照）。 |
 | `src/contingency/schedules/__init__.py` | `src/schedules/mod.rs` | |
 | `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF`（ファクトリ）。 |
 | `src/contingency/schedules/interval.py` | `src/schedules/interval.rs` | `FI`, `VI`, `RI`, `LimitedHold`。 |
@@ -222,6 +223,19 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 確率的 fixture は Python の Mersenne Twister と Rust の `SmallRng` が
 同一の整数 seed でも別系列の draw を生成するため `#[ignore]` 扱いと
 する。`cargo test -- --ignored` で緩い構造的チェックとして実行可能。
+
+`src/helpers/py_random.rs` は Python の PRNG を移植したもの。`PyRandom` は
+CPython の `Modules/_randommodule.c` の MT19937（整数 seed を 32 bit の
+word 列に分けて渡す `init_by_array`、`genrand_uint32`、53 bit の
+`random()`、`getrandbits`）に、`contingency-py` が呼ぶ `Lib/random.py` の
+メソッド（`_randbelow_with_getrandbits` 経由の `randrange`、
+`-log(1 - random()) / lambd` の形の `expovariate`、後ろから入れ替える
+`shuffle`）を加えたもの。同じ非負整数の seed で `random.Random(seed)` と
+bit 単位で同じ列を返し、unit test は CPython が出した列で固定している。
+整数の draw はどのホストでも厳密に一致する。`expovariate` はプラット
+フォームの `log` を呼ぶため、libm の実装（例: macOS の arm64 と x86_64）に
+よって最後の 1 bit が違いうる。Rust と Python が同じ libm で動くときに
+厳密に一致する。
 
 | Fixture | Mode |
 |---|---|
