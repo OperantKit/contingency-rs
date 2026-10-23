@@ -28,7 +28,7 @@
 //! Skinner, B. F. (1957). *Schedules of reinforcement* (with C. B.
 //! Ferster). Appleton-Century-Crofts.
 
-use rand::{rngs::SmallRng, Rng, SeedableRng};
+use crate::helpers::py_random::PyRandom;
 
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -145,7 +145,7 @@ pub struct VR {
     mean: f64,
     n_intervals: usize,
     seed: Option<u64>,
-    rng: SmallRng,
+    rng: PyRandom,
     sequence: Vec<u64>,
     cursor: usize,
     count: u64,
@@ -181,10 +181,7 @@ impl VR {
                 "VR requires n_intervals >= 1, got {n_intervals}"
             )));
         }
-        let rng = match seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        let rng = PyRandom::from_optional_seed(seed);
         let mut s = Self {
             mean,
             n_intervals,
@@ -216,7 +213,8 @@ impl VR {
     }
 
     fn next_sub_seed(&mut self) -> u64 {
-        self.rng.gen::<u64>()
+        // Same draw as the Python `rng.randrange(0, 2**31 - 1)`.
+        self.rng.randrange(0, 2_147_483_647)
     }
 
     fn reload_sequence(&mut self) {
@@ -260,10 +258,7 @@ impl Schedule for VR {
     }
 
     fn reset(&mut self) {
-        self.rng = match self.seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        self.rng = PyRandom::from_optional_seed(self.seed);
         self.count = 0;
         self.last_now = None;
         self.reload_sequence();
@@ -272,7 +267,7 @@ impl Schedule for VR {
 
 /// Random-Ratio schedule: each response reinforced with probability `p`.
 ///
-/// Determinism: when a `seed` is supplied, an [`SmallRng`] snapshot is
+/// Determinism: when a `seed` is supplied, a [`PyRandom`] snapshot is
 /// captured at construction. [`RR::reset`] restores the snapshot so the
 /// Bernoulli draw sequence replays identically. When `seed` is `None`,
 /// a fresh entropy-seeded RNG is created and its initial state is
@@ -286,8 +281,8 @@ impl Schedule for VR {
 #[derive(Debug, Clone)]
 pub struct RR {
     p: f64,
-    initial_rng: SmallRng,
-    rng: SmallRng,
+    initial_rng: PyRandom,
+    rng: PyRandom,
     last_now: Option<f64>,
 }
 
@@ -312,10 +307,7 @@ impl RR {
                 "RR requires 0 < probability <= 1, got {probability}"
             )));
         }
-        let initial_rng = match seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        let initial_rng = PyRandom::from_optional_seed(seed);
         let rng = initial_rng.clone();
         Ok(Self {
             p: probability,
@@ -339,7 +331,7 @@ impl Schedule for RR {
         if event.is_none() {
             return Ok(Outcome::empty());
         }
-        let draw: f64 = self.rng.gen::<f64>();
+        let draw: f64 = self.rng.random();
         if draw < self.p {
             return Ok(Outcome::reinforced(Reinforcer::at(now)));
         }

@@ -45,8 +45,7 @@
 //!   Analysis of Behavior*, 11(4), 405-414.
 //!   <https://doi.org/10.1901/jeab.1968.11-405>
 
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use crate::helpers::py_random::PyRandom;
 
 use crate::{
     constants::TIME_TOL,
@@ -172,7 +171,7 @@ pub struct VT {
     mean: f64,
     n_intervals: usize,
     master_seed: Option<u64>,
-    master_rng: SmallRng,
+    master_rng: PyRandom,
     sequence: Vec<f64>,
     cursor: usize,
     required: f64,
@@ -198,10 +197,7 @@ impl VT {
                 "VT requires n_intervals >= 1".into(),
             ));
         }
-        let master_rng = match seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        let master_rng = PyRandom::from_optional_seed(seed);
         let mut this = Self {
             mean: mean_interval,
             n_intervals,
@@ -228,10 +224,9 @@ impl VT {
     }
 
     fn next_sub_seed(&mut self) -> u64 {
-        // Use a wide draw to cover the full u64 space — the sub-seed
-        // is passed through to `generate_intervals` which re-hashes
-        // into a fresh SmallRng.
-        self.master_rng.gen::<u64>()
+        // Same draw as the Python `rng.randrange(0, 2**31 - 1)`; the
+        // sub-seed seeds a fresh `PyRandom` inside `generate_intervals`.
+        self.master_rng.randrange(0, 2_147_483_647)
     }
 
     fn reload_sequence(&mut self) {
@@ -274,10 +269,7 @@ impl Schedule for VT {
     }
 
     fn reset(&mut self) {
-        self.master_rng = match self.master_seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        self.master_rng = PyRandom::from_optional_seed(self.master_seed);
         self.anchor = None;
         self.last_now = None;
         self.reload_sequence();
@@ -295,8 +287,8 @@ impl Schedule for VT {
 /// elapsed time (memoryless property). RT is the time-based analogue
 /// of RR.
 ///
-/// Intervals are drawn via `-mean * (1 - r).ln()` with
-/// `r = rng.gen::<f64>()`. An initial interval is drawn at
+/// Intervals are drawn via `rng.expovariate(1.0 / mean)`, i.e.
+/// `-(1 - r).ln() / (1 / mean)` with `r = rng.random()`. An initial interval is drawn at
 /// construction so the first reinforcer has an expected wait of
 /// `mean_interval` from the first-step anchor.
 ///
@@ -311,8 +303,8 @@ impl Schedule for VT {
 #[derive(Debug, Clone)]
 pub struct RT {
     mean: f64,
-    initial_rng: SmallRng,
-    current_rng: SmallRng,
+    initial_rng: PyRandom,
+    current_rng: PyRandom,
     required: f64,
     anchor: Option<f64>,
     last_now: Option<f64>,
@@ -332,10 +324,7 @@ impl RT {
                 "RT requires mean_interval > 0, got {mean_interval}"
             )));
         }
-        let initial_rng = match seed {
-            Some(s) => SmallRng::seed_from_u64(s),
-            None => SmallRng::from_entropy(),
-        };
+        let initial_rng = PyRandom::from_optional_seed(seed);
         let mut current_rng = initial_rng.clone();
         let required = Self::draw_interval(&mut current_rng, mean_interval);
         Ok(Self {
@@ -353,12 +342,11 @@ impl RT {
         self.mean
     }
 
-    fn draw_interval(rng: &mut SmallRng, mean: f64) -> f64 {
-        // r is uniform on [0, 1); `1.0 - r` is in (0, 1], so ln(..) is
-        // finite and non-positive — the negation makes the result
-        // non-negative.
-        let r: f64 = rng.gen();
-        -mean * (1.0 - r).ln()
+    fn draw_interval(rng: &mut PyRandom, mean: f64) -> f64 {
+        // Same call as the Python `rng.expovariate(1.0 / mean)`. The
+        // rate is divided by (not `mean` multiplied by) so the last ulp
+        // matches the Python draw.
+        rng.expovariate(1.0 / mean)
     }
 }
 

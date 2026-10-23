@@ -25,8 +25,7 @@
 //! *Journal of the Experimental Analysis of Behavior*, 12(3), 475-480.
 //! <https://doi.org/10.1901/jeab.1969.12-475>
 
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
+use crate::helpers::py_random::PyRandom;
 
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
@@ -53,11 +52,8 @@ fn require_positive(name: &str, value: f64) -> Result<f64> {
     Ok(value)
 }
 
-fn make_rng(seed: Option<u64>) -> SmallRng {
-    match seed {
-        Some(s) => SmallRng::seed_from_u64(s),
-        None => SmallRng::from_entropy(),
-    }
+fn make_rng(seed: Option<u64>) -> PyRandom {
+    PyRandom::from_optional_seed(seed)
 }
 
 // ---------------------------------------------------------------------------
@@ -91,7 +87,7 @@ pub struct MatchingToSample {
     consequence: Option<Box<dyn Schedule>>,
     incorrect: Option<Box<dyn Schedule>>,
     seed: Option<u64>,
-    rng: SmallRng,
+    rng: PyRandom,
     phase: MtsPhase,
     phase_started: Option<f64>,
     trial_index: u64,
@@ -134,7 +130,7 @@ impl MatchingToSample {
         let ct = require_positive("choice_timeout", choice_timeout)?;
         let it = require_nonneg("iti", iti)?;
         let mut rng = make_rng(seed);
-        let correct = format!("choice_{}", rng.gen_range(0..n_comparisons));
+        let correct = format!("choice_{}", rng.randbelow(n_comparisons as u64));
         let phase = if sd > 0.0 {
             MtsPhase::Sample
         } else {
@@ -188,7 +184,7 @@ impl MatchingToSample {
     }
 
     fn pick_correct(&mut self) -> String {
-        let idx = self.rng.gen_range(0..self.n_comparisons);
+        let idx = self.rng.randbelow(self.n_comparisons as u64);
         format!("choice_{idx}")
     }
 
@@ -371,7 +367,7 @@ impl Schedule for MatchingToSample {
         };
         self.phase_started = None;
         self.trial_index = 0;
-        let idx = self.rng.gen_range(0..self.n_comparisons);
+        let idx = self.rng.randbelow(self.n_comparisons as u64);
         self.correct_operandum = format!("choice_{idx}");
         self.last_now = None;
         self.pending_outcome_label = None;
@@ -410,7 +406,7 @@ pub struct GoNoGo {
     correct_nogo_schedule: Option<Box<dyn Schedule>>,
     false_alarm: Option<Box<dyn Schedule>>,
     seed: Option<u64>,
-    rng: SmallRng,
+    rng: PyRandom,
     phase: GngPhase,
     phase_started: Option<f64>,
     trial_index: u64,
@@ -451,7 +447,7 @@ impl GoNoGo {
         let rw = require_positive("response_window", response_window)?;
         let it = require_nonneg("iti", iti)?;
         let mut rng = make_rng(seed);
-        let current_is_go = rng.gen::<f64>() < go_probability;
+        let current_is_go = rng.random() < go_probability;
         let phase = if current_is_go {
             GngPhase::Go
         } else {
@@ -510,7 +506,7 @@ impl GoNoGo {
     }
 
     fn draw_trial_type(&mut self) -> bool {
-        self.rng.gen::<f64>() < self.go_probability
+        self.rng.random() < self.go_probability
     }
 
     fn begin_trial(&mut self, now: f64) {

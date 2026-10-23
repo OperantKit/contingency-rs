@@ -10,9 +10,8 @@
 
 Python パッケージ `contingency-py` が executable specification の
 正典である。`contingency-py/conformance/` 配下の 23 個の conformance
-fixture が、決定的スケジュールに対する bit 等価性のオラクルとなる。
-確率的 fixture は trajectory template として扱われる
-（`contingency-py/conformance/README.md` 参照）。
+fixture が、seed 付きの確率的スケジュールを含む全スケジュールに対する
+bit 等価性のオラクルとなる（§4）。
 
 DSL のパースは意図的に **Python 専用**である。Rust ランタイムは
 `ScheduleBuilder` で直接構築されたスケジュールを受け付ける。
@@ -43,7 +42,7 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 | `src/contingency/builder.py` | `src/builder.rs` | `ScheduleBuilder` は Rust ネイティブのファサード（27 ファクトリメソッド）。 |
 | `src/contingency/bridge/__init__.py` | *(Rust 対応なし — DSL パースは Python 専用)* | |
 | `src/contingency/helpers/__init__.py` | `src/helpers/mod.rs` | |
-| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | 公開 API は同じ 3 つ。PRNG 乖離については §5 Gotcha 11 参照。 |
+| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | 公開 API は同じ 3 つで、seed 付きの出力も同じ（`PyRandom` の shuffle・`fsum` による剰余補正・偶数丸め）。 |
 | *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`：Python の seed の与え方と標本化メソッドを持つ MT19937 の移植（§4 参照）。 |
 | `src/contingency/schedules/__init__.py` | `src/schedules/mod.rs` | |
 | `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF`（ファクトリ）。 |
@@ -212,7 +211,7 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 スケジュール family の合計：**31**。Rust は **31 / 31** をすべて
 ファーストクラス型としてカバー。追加の Rust カバレッジ：
 `tests/properties.rs` (proptest 13 ケース)、
-`tests/conformance.rs`（strict 17 + ignored 6）。
+`tests/conformance.rs`（全 fixture を strict、ignored なし）。
 
 ## 4. Conformance fixture マッピング
 
@@ -220,9 +219,9 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 ある。Rust 側のリプレイは `contingency-rs/tests/conformance.rs`。
 決定的な fixture は `reinforced` および `Reinforcer` の各フィールドに
 対して **bit 等価** で検証する（浮動小数点許容差は 1e-9）。
-確率的 fixture は Python の Mersenne Twister と Rust の `SmallRng` が
-同一の整数 seed でも別系列の draw を生成するため `#[ignore]` 扱いと
-する。`cargo test -- --ignored` で緩い構造的チェックとして実行可能。
+seed 付きの確率的 fixture も同じ方法で再生する。seed 付きスケジュールは
+すべて `PyRandom`（下記）から引くので、同じ整数 seed から Python と同じ
+乱数列が出る。
 
 `src/helpers/py_random.rs` は Python の PRNG を移植したもの。`PyRandom` は
 CPython の `Modules/_randommodule.c` の MT19937（整数 seed を 32 bit の
@@ -245,12 +244,12 @@ bit 単位で同じ列を返し、unit test は CPython が出した列で固定
 | `atomic/fi_basic.json` | strict |
 | `atomic/ft_basic.json` | strict |
 | `atomic/limited_hold_fi.json` | strict |
-| `atomic/vr_seeded_42.json` | relaxed (`#[ignore]`) |
-| `atomic/vi_seeded_7.json` | relaxed (`#[ignore]`) |
-| `atomic/vt_seeded_3.json` | relaxed (`#[ignore]`) |
-| `atomic/rr_seeded_99.json` | relaxed (`#[ignore]`) |
-| `atomic/ri_seeded_5.json` | relaxed (`#[ignore]`) |
-| `atomic/rt_seeded_11.json` | relaxed (`#[ignore]`) |
+| `atomic/vr_seeded_42.json` | strict |
+| `atomic/vi_seeded_7.json` | strict |
+| `atomic/vt_seeded_3.json` | strict |
+| `atomic/rr_seeded_99.json` | strict |
+| `atomic/ri_seeded_5.json` | strict |
+| `atomic/rt_seeded_11.json` | strict |
 | `compound/concurrent_cod.json` | strict |
 | `compound/concurrent_cod_tick.json` | strict |
 | `compound/chained_fr2_fr3.json` | strict |
@@ -263,10 +262,8 @@ bit 単位で同じ列を返し、unit test は CPython が出した列で固定
 | `differential/drh_basic.json` | strict |
 | `progressive/pr_arithmetic.json` | strict |
 
-合計：fixture 23、strict 17 + relaxed 6。現在の
-`tests/conformance.rs` の結果は passed 18（strict の fixture 17 と
-網羅性テスト）、ignored 6。
-relaxed 化は `BY_DESIGN`（§5 Gotcha G11 参照）。
+この表の fixture も、コーパスの全 fixture も strict に再生する。
+`tests/conformance.rs` に ignored のテストはない。
 
 ## 5. セマンティック不変条件チェックリスト（Gotchas 1-13 + Timeout meta）
 
@@ -293,7 +290,7 @@ relaxed 化は `BY_DESIGN`（§5 Gotcha G11 参照）。
 | G8 | `ProgressiveRatio` の `step_fn` は遅延評価。不正な戻り値は最初の参照時に表面化。 | `progressive.rs`。 |
 | G9 | `reset()` は seed 未指定スケジュールでパラメータを再サンプリングしない。 | `ratio.rs`, `interval.rs`, `time_based.rs`。 |
 | G10 | `RR`/`RI`/`RT` は構築時に RNG 状態をスナップショット。 | 同上。 |
-| G11 | PRNG bit 乖離：Rust `SmallRng` ≠ Python Mersenne Twister のため確率的 fixture は既定で ignored。 | `BY_DESIGN`；`conformance.rs` + conformance `README.md` に記載。 |
+| G11 | seed 付きの乱数：`PyRandom` が `random.Random(seed)` を再現するので、seed 付きの確率的 fixture も strict に再生する。 | `py_random.rs`、`conformance.rs`。 |
 | G12 | `Outcome.meta` キー：`current_component`, `chain_transition`, `cod_suppressed`, `operandum`, `alternative_winner`。 | `sequence.rs`, `concurrent.rs`, `alternative.rs`。 |
 | G13 | `Timeout.during_timeout` meta：blackout 中は `Outcome.meta["during_timeout"] = true` となり、wrap されたスケジュールへの応答はすべて抑制。 | `timeout.rs`。 |
 
@@ -351,7 +348,7 @@ Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）�
 | G2 | DSL ブリッジ。**By design** — DSL のパースは Python 専用のまま。Rust ランタイムは `ScheduleBuilder` で駆動し、DSL コンシューマは `contingency-py` 経由で利用する。 | `BY_DESIGN` |
 | G3 | HAL レイヤ。**Closed** — `Apparatus` トレイト + `VirtualApparatus` + `SerialApparatus` 完備。Python の `HilBridgeApparatus` ホスト側ヘルパは意図的に未提供（§6 参照）。 | Resolved |
 | G4 | 非 Python バインディング（UniFFI / WASM / cbindgen）。**Closed** — 3 つともライブシンボルと E2E テストあり（§7）。 | Resolved |
-| G5 | 確率的 conformance fixture（23 中 6）は Rust `SmallRng` ≠ Python Mersenne Twister のため strict リプレイできない。`cargo test -- --ignored` で relaxed 実行可能。 | `BY_DESIGN` |
+| G5 | 確率的 conformance fixture。**解消** — `PyRandom` が CPython の `random.Random` を移植し、seed 付き fixture を strict に再生する。 | Resolved |
 | G7 | `NotConnectedError` を `Hardware(msg)` variant にフラット化。Python の specific subclass を catch していた呼び出し側はメッセージ文字列マッチが必要。 | `BY_DESIGN` |
 | G9 | **嫌悪系および試行ベース系を移植済み。** Rust の `src/schedules/aversive.rs`（`Sidman`, `DiscriminatedAvoidance`, `Escape`）と `src/schedules/trial_based.rs`（`MatchingToSample`, `GoNoGo`）が存在。 | Resolved |
 | G10 | `Multiple` および `Tandem` の conformance fixture（`multiple_fr_fr`, `tandem_fr_fr`）。**Closed** — 両方追加済み。 | Resolved |
@@ -360,8 +357,8 @@ Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）�
 **BUG severity: 0 件。** §5 の不変条件はいずれも違反なし。31 family
 すべてに Rust ランタイム実装あり。
 
-判定：**PASS** — `BY_DESIGN` が 3 件残る（G2 DSL を Python 専用、
-G5 PRNG 乖離、G7 エラー variant のフラット化）。`ScheduleBuilder`
+判定：**PASS** — `BY_DESIGN` が 2 件残る（G2 DSL を Python 専用、
+G7 エラー variant のフラット化）。`ScheduleBuilder`
 駆動のワークフローについて機能的 gap はない。
 
 ## 9. 検証コマンド
@@ -370,7 +367,6 @@ G5 PRNG 乖離、G7 エラー variant のフラット化）。`ScheduleBuilder`
 # Rust：ネイティブライブラリ + バインディング + conformance
 cd apps/core/contingency-rs
 cargo test -p contingency --all-features
-cargo test -p contingency --all-features -- --ignored   # relaxed stochastic
 cargo clippy -p contingency --all-targets --all-features -- -D warnings
 
 # Python：全テスト + conformance リプレイ
@@ -380,7 +376,7 @@ cd apps/core/contingency-py
 
 2026-10-23 に `rustup run stable cargo test --all-features`（`python`・`uniffi`・`serial` をすべて有効）と、`contingency-py` での `.venv/bin/pytest -q` で数えた結果：
 
-- Rust：lib 512 + conformance (strict) 19 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + fleshler_hoffman_shape 11 + hil_integration 2 + hw_serial_tests 12 + hw_virtual_tests 16 + properties 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 3 = **テスト 613 件 green**。確率的 conformance 6 件は既定で `#[ignore]`。
+- Rust：lib 512 + conformance (strict) 19 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + fleshler_hoffman_shape 11 + hil_integration 2 + hw_serial_tests 12 + hw_virtual_tests 16 + properties 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 3 = **テスト 613 件 green**。（その後、seed 付きの conformance fixture も strict に再生するようになり、ignored のテストはない。）
 - Python：**1084 件 passed、8 件 skipped**。
 
 ## 参考文献

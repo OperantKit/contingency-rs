@@ -54,6 +54,16 @@ impl PyRandom {
         }
     }
 
+    /// Equivalent to `random.Random(seed)` where `seed` is `int | None`:
+    /// [`PyRandom::from_seed`] for `Some`, [`PyRandom::from_entropy`]
+    /// for `None`.
+    pub fn from_optional_seed(seed: Option<u64>) -> Self {
+        match seed {
+            Some(s) => Self::from_seed(s),
+            None => Self::from_entropy(),
+        }
+    }
+
     /// Equivalent to `random.Random()` (seeded from OS entropy).
     ///
     /// Falls back to the system clock when OS entropy is unavailable.

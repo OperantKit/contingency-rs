@@ -47,13 +47,11 @@
 //!   *Journal of the Experimental Analysis of Behavior*, 21(3),
 //!   389-408. <https://doi.org/10.1901/jeab.1974.21-389>
 
-use rand::rngs::SmallRng;
-use rand::{Rng, SeedableRng};
-
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::helpers::fleshler_hoffman::generate_intervals;
+use crate::helpers::py_random::PyRandom;
 use crate::schedule::{probe_on_clone, ArmableSchedule, Schedule};
 use crate::types::{Outcome, Reinforcer, ResponseEvent};
 use crate::Result;
@@ -157,7 +155,7 @@ pub struct VI {
     mean_interval: f64,
     n_intervals: usize,
     master_seed: Option<u64>,
-    master_rng: SmallRng,
+    master_rng: PyRandom,
     sequence: Vec<f64>,
     cursor: usize,
     arm_time: f64,
@@ -199,12 +197,11 @@ impl VI {
         })
     }
 
-    fn generate(mean_interval: f64, n_intervals: usize, master_rng: &mut SmallRng) -> Vec<f64> {
+    fn generate(mean_interval: f64, n_intervals: usize, master_rng: &mut PyRandom) -> Vec<f64> {
         // Derive a per-cycle sub-seed from the master RNG so the
         // full trajectory is deterministic given the constructor
-        // seed. Mirrors the Python `random.Random.getrandbits(64)`
-        // approach.
-        let subseed: u64 = master_rng.gen();
+        // seed. Same draw as the Python `random.Random.getrandbits(64)`.
+        let subseed: u64 = master_rng.getrandbits(64);
         generate_intervals(mean_interval, n_intervals, Some(subseed))
     }
 
@@ -280,8 +277,8 @@ impl ArmableSchedule for VI {
 #[derive(Debug, Clone)]
 pub struct RI {
     mean_interval: f64,
-    initial_rng: SmallRng,
-    current_rng: SmallRng,
+    initial_rng: PyRandom,
+    current_rng: PyRandom,
     arm_time: f64,
     last_now: Option<f64>,
 }
@@ -444,21 +441,18 @@ impl<S: ArmableSchedule> Schedule for LimitedHold<S> {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn make_master_rng(seed: Option<u64>) -> SmallRng {
-    match seed {
-        Some(s) => SmallRng::seed_from_u64(s),
-        None => SmallRng::from_entropy(),
-    }
+fn make_master_rng(seed: Option<u64>) -> PyRandom {
+    PyRandom::from_optional_seed(seed)
 }
 
 /// Exponential draw with mean `mean` using the inverse-CDF method.
 ///
-/// `r = rng.gen::<f64>()` is uniform on `[0, 1)`, so `1.0 - r` is in
-/// `(0, 1]` and `ln(1.0 - r)` is finite non-positive. Result:
-/// `-mean * ln(1.0 - r)` is `>= 0`, matching `Exp(1 / mean)`.
-fn draw_exp(rng: &mut SmallRng, mean: f64) -> f64 {
-    let r: f64 = rng.gen();
-    -mean * (1.0 - r).ln()
+/// Same call as the Python `rng.expovariate(1.0 / mean)`, i.e.
+/// `-ln(1.0 - random()) / (1.0 / mean)`. The rate is computed first and
+/// then divided by, rather than multiplying by `mean`, so the last ulp
+/// matches the Python draw.
+fn draw_exp(rng: &mut PyRandom, mean: f64) -> f64 {
+    rng.expovariate(1.0 / mean)
 }
 
 // ---------------------------------------------------------------------------

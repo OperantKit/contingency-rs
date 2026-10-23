@@ -16,7 +16,7 @@ use crate::{Outcome, ResponseEvent, Result};
 /// The trait requires `Send` so schedules may be moved across threads
 /// and held inside a `Mutex` behind a UniFFI `Arc`-shared object. All
 /// concrete implementations in this crate satisfy `Send` naturally
-/// (they hold only `f64` / integers / `SmallRng` / `Vec` / `Box<dyn
+/// (they hold only `f64` / integers / `PyRandom` / `Vec` / `Box<dyn
 /// Schedule>` fields, none of which introduce `!Send` state).
 pub trait Schedule: Send {
     /// Advance to `now` and optionally register a response.

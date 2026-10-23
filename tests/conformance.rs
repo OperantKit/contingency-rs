@@ -3,37 +3,30 @@
 //! Loads each JSON fixture under `../contingency-py/conformance/` and
 //! replays its event sequence against the Rust `contingency` runtime.
 //!
-//! Deterministic fixtures (atomic, compound, differential, progressive,
-//! wrapper — Timeout / ResponseCost — and aversive — Sidman /
-//! DiscriminatedAvoidance / Escape) are asserted **bit-equivalent**
-//! against Python observed outcomes: both `Outcome.reinforced` and
-//! (when reinforced) the `Reinforcer` time, magnitude and label must
-//! match within a 1e-9 float tolerance. `Outcome.meta` is not compared.
+//! Every fixture (atomic, compound, differential, progressive, wrapper —
+//! Timeout / ResponseCost — aversive — Sidman / DiscriminatedAvoidance /
+//! Escape — and trial-based) is asserted **bit-equivalent** against
+//! Python observed outcomes: both `Outcome.reinforced` and (when
+//! reinforced) the `Reinforcer` time, magnitude and label must match
+//! within a 1e-9 float tolerance. `Outcome.meta` is not compared.
 //!
-//! Stochastic fixtures (seeded VR, VI, RI, RR, VT, RT, and the
-//! trial-based MatchingToSample / GoNoGo, whose correct comparison and
-//! trial type are PRNG draws) cannot be
-//! bit-reproduced because Python's Mersenne Twister and Rust's
-//! `SmallRng` are different PRNGs. The Python conformance README labels
-//! these as "trajectory templates." For Rust, the stochastic fixture
-//! tests are marked `#[ignore]` with an explicit relaxation rationale;
-//! see each test's doc comment.
+//! This includes the seeded stochastic fixtures (VR, VI, RI, RR, VT, RT,
+//! and the trial-based MatchingToSample / GoNoGo, whose correct
+//! comparison and trial type are PRNG draws): those schedules draw from
+//! `PyRandom`, a port of CPython's `random.Random`, so the same integer
+//! seed yields the same draws as the Python generator.
 //!
 //! # Parity corpus is single-source
 //!
 //! The directory `../contingency-py/conformance/` is the **single
 //! source of truth** for the cross-language parity corpus:
 //! `contingency-py` emits every fixture, and this Rust harness is
-//! obligated to replay **every deterministic fixture** bit-equivalently
-//! through [`run_fixture`]. That obligation is enforced mechanically by
-//! `conformance_corpus_completeness`, which walks the corpus, classifies
-//! each fixture (a fixture is *stochastic* iff its schedule subtree
-//! contains any type in [`STOCHASTIC_TYPES`]), and fails if
-//! any deterministic fixture lacks a `run_fixture(...)` call. A newly
-//! generated deterministic fixture therefore cannot land un-replayed,
-//! and commenting out a `run_fixture(...)` line trips the same guard.
-//! Only the stochastic fixtures are exempt from bit-equivalent replay;
-//! they stay `#[ignore]`d (see below).
+//! obligated to replay **every fixture** bit-equivalently through
+//! [`run_fixture`]. That obligation is enforced mechanically by
+//! `conformance_corpus_completeness`, which walks the corpus and fails
+//! if any fixture lacks a `run_fixture(...)` call. A newly generated
+//! fixture therefore cannot land un-replayed, and commenting out a
+//! `run_fixture(...)` line trips the same guard.
 //!
 //! # References
 //!
@@ -583,57 +576,6 @@ fn run_fixture(relative: &str) {
     }
 }
 
-/// Relaxed replay for stochastic fixtures: does **not** require bit
-/// equivalence with the Python-recorded trajectory, because Rust's
-/// `SmallRng` differs from Python's Mersenne Twister.
-///
-/// Instead, verifies that:
-/// 1. The schedule replays without raising an error.
-/// 2. The total number of reinforcers produced by Rust is within a
-///    tolerance band around the Python-recorded count (50%).
-/// 3. For interval / time families, no reinforcer is emitted before the
-///    first step's `now` (causality sanity).
-fn run_stochastic_fixture(relative: &str) {
-    let fixture = load_fixture(relative);
-    let mut schedule = build_schedule(&fixture.schedule);
-    let mut rust_count = 0usize;
-    let mut first_rein_time: Option<f64> = None;
-    for (i, step) in fixture.steps.iter().enumerate() {
-        let outcome = schedule
-            .step(step.now, step.event.as_ref())
-            .unwrap_or_else(|e| panic!("{} step {}: schedule.step raised: {e}", relative, i));
-        if outcome.reinforced {
-            rust_count += 1;
-            if first_rein_time.is_none() {
-                first_rein_time = outcome.reinforcer.as_ref().map(|r| r.time);
-            }
-        }
-    }
-    let expected_count = fixture.steps.iter().filter(|s| s.expect.reinforced).count();
-    // Loose tolerance: PRNG trajectories differ, so only assert the
-    // order of magnitude matches. 50% band around the Python count.
-    let lower = (expected_count as f64 * 0.5).floor() as usize;
-    let upper = (expected_count as f64 * 1.5).ceil() as usize + 1;
-    assert!(
-        rust_count >= lower && rust_count <= upper,
-        "{}: rust reinforcer count {} outside [{}, {}] (python recorded {})",
-        relative,
-        rust_count,
-        lower,
-        upper,
-        expected_count
-    );
-    if let (Some(first), Some(first_step)) = (first_rein_time, fixture.steps.first()) {
-        assert!(
-            first >= first_step.now - FLOAT_TOL,
-            "{}: first reinforcer time {} precedes first step now {}",
-            relative,
-            first,
-            first_step.now
-        );
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Deterministic fixtures — strict bit-equivalent replay
 // -----------------------------------------------------------------------------
@@ -794,122 +736,71 @@ fn aversive_escape_trial3_iti2() {
 }
 
 // -----------------------------------------------------------------------------
-// Stochastic fixtures — ignored by default
+// Seeded stochastic fixtures — strict bit-equivalent replay
 // -----------------------------------------------------------------------------
 //
-// Python's `random.Random` is a Mersenne Twister; Rust's `SmallRng` is a
-// different PRNG. Even under the same integer seed these produce
-// different Bernoulli / exponential draw sequences, so bit-equivalent
-// replay is impossible without serialising the draw pool itself. These
-// tests are run via `cargo test -- --ignored` as *relaxed* structural
-// checks only: they assert the Rust schedule runs without error and
-// that the number of reinforcements is in the same order of magnitude
-// as the Python-recorded count (50% tolerance band).
+// The seeded schedules (VR, VI, VT, RR, RI, RT, MatchingToSample,
+// GoNoGo) draw from `PyRandom`, a port of CPython's `random.Random`
+// (MT19937 seeded through `init_by_array`, `random()` = genrand_res53,
+// `_randbelow` by rejection on `getrandbits`, `expovariate` as
+// `-log(1 - random()) / lambd`). The same integer seed therefore yields
+// the same draw stream as the Python generator, and these fixtures are
+// replayed exactly like the deterministic ones.
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_vr_seeded_42() {
-    run_stochastic_fixture("atomic/vr_seeded_42.json");
+    run_fixture("atomic/vr_seeded_42.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_vi_seeded_7() {
-    run_stochastic_fixture("atomic/vi_seeded_7.json");
+    run_fixture("atomic/vi_seeded_7.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_vt_seeded_3() {
-    run_stochastic_fixture("atomic/vt_seeded_3.json");
+    run_fixture("atomic/vt_seeded_3.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_rr_seeded_99() {
-    run_stochastic_fixture("atomic/rr_seeded_99.json");
+    run_fixture("atomic/rr_seeded_99.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_ri_seeded_5() {
-    run_stochastic_fixture("atomic/ri_seeded_5.json");
+    run_fixture("atomic/ri_seeded_5.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn atomic_rt_seeded_11() {
-    run_stochastic_fixture("atomic/rt_seeded_11.json");
+    run_fixture("atomic/rt_seeded_11.json");
 }
 
-// The trial-based fixtures draw the correct comparison (MTS) and the
-// Go/NoGo trial type from the PRNG. With a different generator the
-// recorded trajectory is a template only; the count band above is the
-// whole check.
-
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn trial_mts_n2_seed7() {
-    run_stochastic_fixture("trial/mts_n2_seed7.json");
+    run_fixture("trial/mts_n2_seed7.json");
 }
 
 #[test]
-#[ignore = "stochastic: PRNG differs between Python MT and Rust SmallRng"]
 fn trial_gonogo_p05_seed1() {
-    run_stochastic_fixture("trial/gonogo_p05_seed1.json");
+    run_fixture("trial/gonogo_p05_seed1.json");
 }
 
 // -----------------------------------------------------------------------------
-// Completeness guard — no deterministic fixture may go un-replayed
+// Completeness guard — no fixture may go un-replayed
 // -----------------------------------------------------------------------------
 //
 // The parity corpus lives entirely under
 // `../contingency-py/conformance/`; `contingency-py` is its single
-// source of truth. This guard fails the build whenever a *deterministic*
-// fixture exists in the corpus without a corresponding bit-equivalent
+// source of truth. This guard fails the build whenever a fixture exists
+// in the corpus without a corresponding bit-equivalent
 // `run_fixture(...)` replay call in this harness. It catches two drift
 // modes mechanically:
 //
-//   1. A newly generated deterministic fixture is committed but no
-//      `run_fixture(...)` test is added for it.
+//   1. A newly generated fixture is committed but no `run_fixture(...)`
+//      test is added for it.
 //   2. An existing `run_fixture(...)` call is removed or commented out.
-//
-// Stochastic (seeded VR/VI/RI/RR/VT/RT, MatchingToSample, GoNoGo)
-// fixtures are intentionally exempt: they are replayed structurally via
-// `run_stochastic_fixture` under `#[ignore]`, because Rust's `SmallRng`
-// cannot bit-reproduce Python's Mersenne Twister.
-
-/// Seeded schedule types whose trajectories depend on a PRNG stream and
-/// therefore cannot be bit-reproduced across the Python/Rust boundary.
-const STOCHASTIC_TYPES: [&str; 8] = [
-    "VR",
-    "VI",
-    "RI",
-    "RR",
-    "VT",
-    "RT",
-    "MatchingToSample",
-    "GoNoGo",
-];
-
-/// A fixture is stochastic iff its schedule subtree (recursively,
-/// through `components` arrays/objects, `inner`, `first`, `second`,
-/// etc.) contains any [`STOCHASTIC_TYPES`] schedule. Walking the raw
-/// JSON keeps this independent of the spec → schedule translator.
-fn schedule_is_stochastic(v: &serde_json::Value) -> bool {
-    match v {
-        serde_json::Value::Object(map) => {
-            if let Some(serde_json::Value::String(ty)) = map.get("type") {
-                if STOCHASTIC_TYPES.contains(&ty.as_str()) {
-                    return true;
-                }
-            }
-            map.values().any(schedule_is_stochastic)
-        }
-        serde_json::Value::Array(items) => items.iter().any(schedule_is_stochastic),
-        _ => false,
-    }
-}
 
 /// Recursively collect every `*.json` fixture under `dir`, returning
 /// paths relative to `root` with `/` separators (e.g.
@@ -939,9 +830,8 @@ fn collect_fixtures(root: &Path, dir: &Path, out: &mut Vec<String>) {
 /// (only the code portion of each line, before any `//`, is scanned),
 /// so commenting a call out makes the corresponding fixture appear
 /// un-replayed — exactly the RED signal the completeness guard exists
-/// to surface. `run_stochastic_fixture("...")` is *not* matched: the
-/// literal `run_fixture("` is not a substring of it, and the word-
-/// boundary check below rejects any identifier-prefixed match.
+/// to surface. The word-boundary check below rejects any
+/// identifier-prefixed lookalike such as `other_run_fixture("...")`.
 fn replayed_fixtures() -> HashSet<String> {
     const NEEDLE: &str = "run_fixture(\"";
     let src_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -983,9 +873,9 @@ fn replayed_fixtures() -> HashSet<String> {
     out
 }
 
-/// Every deterministic fixture in the parity corpus must have a
-/// bit-equivalent `run_fixture(...)` replay call. Fails listing any
-/// deterministic fixture that is missing one.
+/// Every fixture in the parity corpus must have a bit-equivalent
+/// `run_fixture(...)` replay call. Fails listing any fixture that is
+/// missing one.
 #[test]
 fn conformance_corpus_completeness() {
     let dir = conformance_dir();
@@ -1000,31 +890,17 @@ fn conformance_corpus_completeness() {
 
     let covered = replayed_fixtures();
 
-    let mut missing = Vec::new();
-    for rel in &fixtures {
-        let path = dir.join(rel);
-        let bytes = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("failed to read fixture {}: {e}", path.display()));
-        let value: serde_json::Value = serde_json::from_str(&bytes)
-            .unwrap_or_else(|e| panic!("failed to parse fixture {}: {e}", path.display()));
-        let schedule = value.get("schedule").unwrap_or(&serde_json::Value::Null);
-        if schedule_is_stochastic(schedule) {
-            // Stochastic fixtures are exempt (replayed under #[ignore]).
-            continue;
-        }
-        if !covered.contains(rel) {
-            missing.push(rel.clone());
-        }
-    }
+    let missing: Vec<&String> = fixtures
+        .iter()
+        .filter(|rel| !covered.contains(*rel))
+        .collect();
 
     assert!(
         missing.is_empty(),
-        "deterministic conformance fixtures with no bit-equivalent \
-         run_fixture(...) replay call: {missing:?}\n\
-         Every deterministic fixture under {} must be replayed. Add a \
-         `run_fixture(\"<relative-path>\")` test for each (or, if a fixture \
-         is genuinely stochastic, ensure its schedule subtree carries a \
-         type listed in STOCHASTIC_TYPES so this guard treats it as exempt).",
+        "conformance fixtures with no bit-equivalent run_fixture(...) \
+         replay call: {missing:?}\n\
+         Every fixture under {} must be replayed. Add a \
+         `run_fixture(\"<relative-path>\")` test for each.",
         dir.display()
     );
 }

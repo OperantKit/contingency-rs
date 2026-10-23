@@ -10,9 +10,8 @@ live in Rust?" Discrepancies are surfaced explicitly as `DEFERRED`,
 
 The Python package `contingency-py` is the authoritative executable
 specification. The 23 conformance fixtures under
-`contingency-py/conformance/` are the bit-equivalence oracle for
-deterministic schedules; stochastic fixtures are trajectory templates
-(see `contingency-py/conformance/README.md`).
+`contingency-py/conformance/` are the bit-equivalence oracle for every
+schedule, seeded stochastic ones included (§4).
 
 DSL parsing is intentionally **Python-only**. The Rust runtime
 accepts schedules constructed directly via `ScheduleBuilder`. There
@@ -43,7 +42,7 @@ chronological; full provenance lives in `git log`.
 | `src/contingency/builder.py` | `src/builder.rs` | `ScheduleBuilder` is a native Rust facade (27 factory methods). |
 | `src/contingency/bridge/__init__.py` | *(no Rust counterpart — DSL parsing is Python-only)* | |
 | `src/contingency/helpers/__init__.py` | `src/helpers/mod.rs` | |
-| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | Same three public entry points; see §5 Gotcha 11 for PRNG divergence. |
+| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | Same three public entry points and the same seeded output (`PyRandom` shuffle, `fsum` remnant, round-half-to-even). |
 | *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`: MT19937 port with Python's seeding and sampling methods (see §4). |
 | `src/contingency/schedules/__init__.py` | `src/schedules/mod.rs` | |
 | `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF` (factory). |
@@ -213,17 +212,16 @@ methods in the corresponding `test_*.py` file. The conformance corpus
 
 Schedule families: **31 total**. Rust covers **31 / 31** as first-class
 types. Additional Rust coverage: `tests/properties.rs` (13 proptest
-cases), `tests/conformance.rs` (17 strict + 6 ignored).
+cases), `tests/conformance.rs` (all fixtures strict, none ignored).
 
 ## 4. Conformance fixture mapping
 
 All 23 JSON fixtures live under `contingency-py/conformance/`. The
 Rust replay is in `contingency-rs/tests/conformance.rs`. Deterministic
 fixtures are asserted **bit-equivalent** on `reinforced` + every
-`Reinforcer` field (1e-9 float tolerance). Stochastic fixtures are
-`#[ignore]`'d because Python's Mersenne Twister and Rust's `SmallRng`
-produce different draw sequences under the same integer seed; they
-run via `cargo test -- --ignored` as relaxed structural checks.
+`Reinforcer` field (1e-9 float tolerance). Seeded stochastic fixtures
+are replayed the same way: every seeded schedule draws from `PyRandom`
+(below), so the same integer seed yields the same draws as Python.
 
 `src/helpers/py_random.rs` ports Python's PRNG: `PyRandom` is the
 MT19937 generator of CPython's `Modules/_randommodule.c`
@@ -247,12 +245,12 @@ run on the same libm.
 | `atomic/fi_basic.json` | strict |
 | `atomic/ft_basic.json` | strict |
 | `atomic/limited_hold_fi.json` | strict |
-| `atomic/vr_seeded_42.json` | relaxed (`#[ignore]`) |
-| `atomic/vi_seeded_7.json` | relaxed (`#[ignore]`) |
-| `atomic/vt_seeded_3.json` | relaxed (`#[ignore]`) |
-| `atomic/rr_seeded_99.json` | relaxed (`#[ignore]`) |
-| `atomic/ri_seeded_5.json` | relaxed (`#[ignore]`) |
-| `atomic/rt_seeded_11.json` | relaxed (`#[ignore]`) |
+| `atomic/vr_seeded_42.json` | strict |
+| `atomic/vi_seeded_7.json` | strict |
+| `atomic/vt_seeded_3.json` | strict |
+| `atomic/rr_seeded_99.json` | strict |
+| `atomic/ri_seeded_5.json` | strict |
+| `atomic/rt_seeded_11.json` | strict |
 | `compound/concurrent_cod.json` | strict |
 | `compound/concurrent_cod_tick.json` | strict |
 | `compound/chained_fr2_fr3.json` | strict |
@@ -265,10 +263,8 @@ run on the same libm.
 | `differential/drh_basic.json` | strict |
 | `progressive/pr_arithmetic.json` | strict |
 
-Totals: 23 fixtures, 17 strict + 6 relaxed. The current
-`tests/conformance.rs` result is 18 passed (the 17 strict fixtures and
-the completeness test), 6 ignored. The relaxation
-is `BY_DESIGN`: see Gotcha G11 in §5.
+All fixtures in this table, and every fixture in the corpus, are
+replayed strictly; `tests/conformance.rs` has no ignored tests.
 
 ## 5. Semantic-invariant checklist (Gotchas 1-13 + Timeout meta)
 
@@ -295,7 +291,7 @@ plus an additional Timeout invariant introduced by Wave 1.
 | G8 | `ProgressiveRatio`'s `step_fn` is lazy; invalid returns surface on first consultation. | `progressive.rs`. |
 | G9 | `reset()` does not re-sample random parameters on non-seeded schedules. | `ratio.rs`, `interval.rs`, `time_based.rs`. |
 | G10 | `RR`/`RI`/`RT` snapshot RNG state at construction. | same. |
-| G11 | PRNG bit-divergence: Rust `SmallRng` ≠ Python Mersenne Twister → stochastic fixtures ignored by default. | `BY_DESIGN`; documented in `conformance.rs` + conformance `README.md`. |
+| G11 | Seeded draws: `PyRandom` reproduces `random.Random(seed)`, so seeded stochastic fixtures replay strictly. | `py_random.rs`, `conformance.rs`. |
 | G12 | `Outcome.meta` keys: `current_component`, `chain_transition`, `cod_suppressed`, `operandum`, `alternative_winner`. | `sequence.rs`, `concurrent.rs`, `alternative.rs`. |
 | G13 | `Timeout.during_timeout` meta: while inside the blackout window, `Outcome.meta["during_timeout"] = true` and all responses are suppressed from the wrapped schedule. | `timeout.rs`. |
 
@@ -354,7 +350,7 @@ that exercise the cross-language boundary.
 | G2 | DSL bridge. **By design** — DSL parsing remains Python-only. The Rust runtime is driven via `ScheduleBuilder`; DSL consumers go through `contingency-py`. | `BY_DESIGN` |
 | G3 | HAL layer. **Closed** — `Apparatus` trait + `VirtualApparatus` + `SerialApparatus` present. Python `HilBridgeApparatus` host-side helper is intentionally absent; see §6. | Resolved |
 | G4 | Non-Python bindings (UniFFI / WASM / cbindgen). **Closed** — all three have live symbols and E2E tests (§7). | Resolved |
-| G5 | Stochastic conformance fixtures (6 of 23) do not strict-replay because Rust `SmallRng` ≠ Python Mersenne Twister. They run relaxed via `cargo test -- --ignored`. | `BY_DESIGN` |
+| G5 | Stochastic conformance fixtures. **Closed** — `PyRandom` ports CPython's `random.Random`, and the seeded fixtures replay strictly. | Resolved |
 | G7 | `NotConnectedError` flattened into `Hardware(msg)` variant. Python callers catching the specific subclass must string-match the message. | `BY_DESIGN` |
 | G9 | **Aversive and trial-based schedule families ported.** Rust `src/schedules/aversive.rs` (`Sidman`, `DiscriminatedAvoidance`, `Escape`) and `src/schedules/trial_based.rs` (`MatchingToSample`, `GoNoGo`) now exist. | Resolved |
 | G10 | `Multiple` and `Tandem` conformance fixtures (`multiple_fr_fr`, `tandem_fr_fr`). **Closed** — both landed. | Resolved |
@@ -363,8 +359,8 @@ that exercise the cross-language boundary.
 **BUG-severity items: 0.** No invariant from §5 is violated. All 31
 schedule families have runtime support in Rust.
 
-Verdict: **PASS** — three `BY_DESIGN` items remain (G2 DSL parsing
-Python-only, G5 PRNG divergence, G7 error-variant flattening). Zero
+Verdict: **PASS** — two `BY_DESIGN` items remain (G2 DSL parsing
+Python-only, G7 error-variant flattening). Zero
 functional gaps for `ScheduleBuilder`-driven workflows.
 
 ## 9. Verification commands
@@ -373,7 +369,6 @@ functional gaps for `ScheduleBuilder`-driven workflows.
 # Rust: native library + bindings + conformance
 cd apps/core/contingency-rs
 cargo test -p contingency --all-features
-cargo test -p contingency --all-features -- --ignored   # relaxed stochastic
 cargo clippy -p contingency --all-targets --all-features -- -D warnings
 
 # Python: full test suite + conformance replay
@@ -383,7 +378,7 @@ cd apps/core/contingency-py
 
 Counted on 2026-10-23 with `rustup run stable cargo test --all-features` (all of `python`, `uniffi`, `serial` enabled) and `.venv/bin/pytest -q` in `contingency-py`:
 
-- Rust: 512 lib + 19 conformance (strict) + 1 e2e_c_ffi + 1 e2e_uniffi + 1 e2e_wasm + 7 ffi_smoke + 11 fleshler_hoffman_shape + 2 hil_integration + 12 hw_serial_tests + 16 hw_virtual_tests + 13 properties + 1 python_smoke + 14 uniffi_smoke + 3 doc-tests = **613 tests green**; 6 stochastic conformance tests `#[ignore]`'d by default.
+- Rust: 512 lib + 19 conformance (strict) + 1 e2e_c_ffi + 1 e2e_uniffi + 1 e2e_wasm + 7 ffi_smoke + 11 fleshler_hoffman_shape + 2 hil_integration + 12 hw_serial_tests + 16 hw_virtual_tests + 13 properties + 1 python_smoke + 14 uniffi_smoke + 3 doc-tests = **613 tests green**. (Since then the seeded conformance fixtures replay strictly and no test is ignored.)
 - Python: **1084 passed, 8 skipped**.
 
 ## References

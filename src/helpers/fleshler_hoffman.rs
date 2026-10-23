@@ -12,23 +12,77 @@
 //!
 //! # Determinism
 //!
-//! RNG is `SmallRng` seeded from an optional `u64`. The shuffle uses
-//! `slice::shuffle`. The Python port uses Python's `random.Random`
-//! (Mersenne Twister); bit-equivalent output across ports is NOT
-//! guaranteed for stochastic schedules. Conformance fixtures treat
-//! those as trajectory templates rather than exact replays.
+//! RNG is [`PyRandom`], a port of Python's `random.Random`, seeded from
+//! an optional `u64` the same way `random.Random(seed)` is. The shuffle
+//! is `random.shuffle` and the Hantula placement is `randrange(0, n)`,
+//! so a given seed yields the same sequence as the Python port. The
+//! remaining arithmetic follows the Python port too: the VI remnant
+//! correction sums with [`fsum`] (correctly rounded, like `math.fsum`)
+//! and integer rounding is round-half-to-even (like Python `round`).
 
-#[allow(unused_imports)]
-use rand::prelude::*;
-use rand::rngs::SmallRng;
-use rand::seq::SliceRandom;
-use rand::{Rng, SeedableRng};
+use super::py_random::PyRandom;
 
-fn make_rng(seed: Option<u64>) -> SmallRng {
-    match seed {
-        Some(s) => SmallRng::seed_from_u64(s),
-        None => SmallRng::from_entropy(),
+fn make_rng(seed: Option<u64>) -> PyRandom {
+    PyRandom::from_optional_seed(seed)
+}
+
+/// Correctly rounded sum of `values`, matching Python's `math.fsum`
+/// for finite inputs.
+///
+/// Shewchuk's algorithm: keep a list of non-overlapping partial sums
+/// whose exact total equals the running sum, then add them from the
+/// largest down and fix the last bit for half-way cases, as CPython's
+/// `math_fsum` does. A plain left-to-right sum can differ from
+/// `math.fsum` in the last ulp, which would shift element 0 of a VI
+/// sequence away from the Python value.
+fn fsum(values: &[f64]) -> f64 {
+    let mut partials: Vec<f64> = Vec::new();
+    for &value in values {
+        let mut x = value;
+        let mut kept = 0;
+        for j in 0..partials.len() {
+            let mut y = partials[j];
+            if x.abs() < y.abs() {
+                std::mem::swap(&mut x, &mut y);
+            }
+            let hi = x + y;
+            let lo = y - (hi - x);
+            if lo != 0.0 {
+                partials[kept] = lo;
+                kept += 1;
+            }
+            x = hi;
+        }
+        partials.truncate(kept);
+        partials.push(x);
     }
+    let mut n = partials.len();
+    if n == 0 {
+        return 0.0;
+    }
+    n -= 1;
+    let mut hi = partials[n];
+    let mut lo = 0.0;
+    while n > 0 {
+        let x = hi;
+        n -= 1;
+        let y = partials[n];
+        hi = x + y;
+        let yr = hi - x;
+        lo = y - yr;
+        if lo != 0.0 {
+            break;
+        }
+    }
+    if n > 0 && ((lo < 0.0 && partials[n - 1] < 0.0) || (lo > 0.0 && partials[n - 1] > 0.0)) {
+        let y = lo * 2.0;
+        let x = hi + y;
+        let yr = x - hi;
+        if y == yr {
+            hi = x;
+        }
+    }
+    hi
 }
 
 /// Raw Fleshler-Hoffman progression (unshuffled).
@@ -56,17 +110,16 @@ pub fn progression(v: f64, n: usize) -> Vec<f64> {
 ///
 /// Preserves the floating-point mean exactly (within rounding) by
 /// adjusting element 0 before shuffling, mirroring the Python impl's
-/// remnant correction.
+/// remnant correction (`raw[0] += v * n - math.fsum(raw)`).
 pub fn generate_intervals(v: f64, n: usize, seed: Option<u64>) -> Vec<f64> {
     if n == 0 {
         return Vec::new();
     }
     let mut raw = progression(v, n);
     let target = v * n as f64;
-    let actual: f64 = raw.iter().copied().sum();
+    let actual = fsum(&raw);
     raw[0] += target - actual;
-    let mut rng = make_rng(seed);
-    raw.shuffle(&mut rng);
+    make_rng(seed).shuffle(&mut raw);
     raw
 }
 
@@ -82,8 +135,11 @@ pub fn generate_ratios(v: f64, n: usize, seed: Option<u64>) -> Vec<u64> {
         return Vec::new();
     }
     let raw = progression(v, n);
-    let mut rd: Vec<i64> = raw.iter().map(|x| x.round().max(1.0) as i64).collect();
-    let target_total = (v * n as f64).round() as i64;
+    let mut rd: Vec<i64> = raw
+        .iter()
+        .map(|x| x.round_ties_even().max(1.0) as i64)
+        .collect();
+    let target_total = (v * n as f64).round_ties_even() as i64;
     let head_sum: i64 = rd[..n - 1].iter().sum();
     let mut surplus = target_total - head_sum;
     if surplus >= 1 {
@@ -102,8 +158,7 @@ pub fn generate_ratios(v: f64, n: usize, seed: Option<u64>) -> Vec<u64> {
         }
     }
     let mut out: Vec<u64> = rd.into_iter().map(|x| x as u64).collect();
-    let mut rng = make_rng(seed);
-    out.shuffle(&mut rng);
+    make_rng(seed).shuffle(&mut out);
     out
 }
 
@@ -119,10 +174,10 @@ pub fn generate_intervals_hantula1991(v: f64, n: usize, seed: Option<u64>) -> Ve
     let mut rd: Vec<u64> = vec![0; n];
     let raw = progression(v, n);
     for (_m, raw_val) in raw.iter().enumerate().take(n) {
-        let value = raw_val.round() as i64;
+        let value = raw_val.round_ties_even() as i64;
         let value = if value == 0 { 1 } else { value as u64 };
         loop {
-            let order = rng.gen_range(0..n);
+            let order = rng.randbelow(n as u64) as usize;
             if rd[order] == 0 {
                 rd[order] = value;
                 break;
@@ -211,5 +266,65 @@ mod tests {
         assert!(generate_intervals(30.0, 0, Some(0)).is_empty());
         assert!(generate_ratios(30.0, 0, Some(0)).is_empty());
         assert!(generate_intervals_hantula1991(30.0, 0, Some(0)).is_empty());
+    }
+
+    // Expected values below were produced by contingency-py's
+    // `helpers.fleshler_hoffman` on CPython 3.11 with the same arguments.
+
+    #[test]
+    fn fsum_is_correctly_rounded() {
+        assert_eq!(fsum(&[0.1; 10]), 1.0);
+        assert_eq!(
+            fsum(&[1e100, 1.0, -1e100, 1e-100, 1e50, -1.0, -1e50]),
+            1e-100
+        );
+        assert_eq!(fsum(&[]), 0.0);
+    }
+
+    #[test]
+    fn generate_intervals_matches_python_where_fsum_differs_from_naive_sum() {
+        // For (v, n) = (0.7, 15) a left-to-right sum of the progression
+        // differs from `math.fsum` in the last bits, so element 0's
+        // remnant correction (shuffled to index 2 here) pins `fsum`.
+        let expected: [u64; 15] = [
+            0x4004c3dc5b4fb27c,
+            0x3feb03e7a005fec1,
+            0x3f98715726694999,
+            0x3ffa00f03756a2d1,
+            0x3fd978b75e122eb9,
+            0x3fd47bc524e2c380,
+            0x3fc7d5d2e180f599,
+            0x3fe2c10bc44cc7e9,
+            0x3fdf1612b980e406,
+            0x3ff0566987e7af8c,
+            0x3fcffdf11f175ecc,
+            0x3fb2ebed5d400c66,
+            0x3ff424ae677cd3ee,
+            0x3fe68140ff5bcca9,
+            0x3fc05c2379802833,
+        ];
+        let got: Vec<u64> = generate_intervals(0.7, 15, Some(1))
+            .iter()
+            .map(|x| x.to_bits())
+            .collect();
+        assert_eq!(got, expected);
+    }
+
+    #[test]
+    fn generate_ratios_matches_python() {
+        assert_eq!(
+            generate_ratios(7.5, 9, Some(5)),
+            vec![2, 4, 1, 1, 24, 14, 10, 7, 5]
+        );
+        assert_eq!(generate_ratios(2.5, 4, Some(0)), vec![3, 1, 1, 5]);
+        assert_eq!(generate_ratios(5.5, 4, Some(0)), vec![6, 1, 3, 12]);
+    }
+
+    #[test]
+    fn generate_intervals_hantula1991_matches_python() {
+        assert_eq!(
+            generate_intervals_hantula1991(10.0, 12, Some(3)),
+            vec![12, 10, 3, 1, 16, 5, 35, 6, 2, 1, 8, 21]
+        );
     }
 }
