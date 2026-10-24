@@ -2,34 +2,17 @@
 
 :jp: [日本語版 README](README.ja.md)
 
-Rust reinforcement schedule engine. Port of [`contingency-py`](https://github.com/OperantKit/contingency-py). Executable specification: the Python package's 39 conformance fixtures under `contingency-py/conformance/`, replayed here.
+contingency-rs is the Rust version of the OperantKit reinforcement-schedule engine: given a schedule such as FR 5 or a concurrent VI VI, and the responses as they happen, it decides when a reinforcer is delivered. Use it when the program that runs your chamber or task is not written in Python: a Rust or C controller, a browser experiment (WebAssembly, with a [jsPsych](https://www.jspsych.org/) plugin), a Swift or Kotlin app, or a hardware-in-the-loop (HIL) test rig. It is a port of [contingency-py](https://github.com/OperantKit/contingency-py) within [OperantKit](https://github.com/OperantKit); the executable specification is the Python package's 39 conformance fixtures, which this crate replays.
 
-## Scope
+- **Same outcomes as contingency-py.** `tests/conformance.rs` replays all 39 fixtures, including the 8 seeded ones; the seeded draws match because the crate ports CPython's `random.Random`.
+- **Variable schedules use the Fleshler–Hoffman (1962) progression,** and concurrent schedules apply the changeover delay (COD): the time after a switch between operanda (levers, keys) during which no response is reinforced.
+- **One engine for several hosts:** Rust, C, Python, WebAssembly, and Swift/Kotlin call the same schedule code.
 
-- Atomic schedules: FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT
-- LimitedHold wrapper
-- Compound: Concurrent (+ COD + FRCO), Multiple, Chained, Tandem, Alternative
-- Differential: DRO (Resetting / Momentary), DRL, DRH
-- Progressive Ratio + step functions (arithmetic, geometric, Richardson-Roberts)
-- Fleshler-Hoffman VI/VR generators (1962 + Hantula 1991)
-- `contingency-hil` binary speaking the HAL JSONL wire protocol
+Notes for AI coding agents are in [AGENTS.md](AGENTS.md).
 
-## Build
+## Installation
 
-```sh
-cargo build --release
-cargo test
-```
-
-### Feature flags
-
-- `python` — build the PyO3 `contingency_core` extension module
-- `uniffi` — build Swift / Kotlin / KMP scaffolding via UniFFI
-- `serial` — enable the serial-port apparatus backend (`hw::serial_backend`)
-
-## 30-second example
-
-The crate is not published on crates.io; add it as a git dependency (`indexmap` is needed to key the concurrent components):
+The crate (named `contingency`) is not on crates.io. Add it to your `Cargo.toml` as a git dependency; `indexmap` is needed to key the components of a concurrent schedule:
 
 ```toml
 [dependencies]
@@ -37,7 +20,9 @@ contingency = { git = "https://github.com/OperantKit/contingency-rs" }
 indexmap = "2"
 ```
 
-Build a concurrent VI 30-s VI 60-s schedule with a 2-s changeover delay (COD), drive it with simulated responses, and count reinforcers per operandum:
+## Example
+
+A concurrent VI 30-s VI 60-s schedule with a 2-s COD, driven by a simulated subject that responds every 0.5 s and switches operanda every 10 s for 10 minutes:
 
 ```rust
 use contingency::{ResponseEvent, ScheduleBuilder};
@@ -66,40 +51,48 @@ fn main() -> contingency::Result<()> {
 }
 ```
 
-`schedule.step(now, event)` advances the clock to `now`; `event` is `Some(&ResponseEvent)` for a response or `None` for the passage of time, and `Outcome.reinforced` says whether a reinforcer is delivered at `now`. The same engine is available in Python as [contingency-py](https://github.com/OperantKit/contingency-py) (`pip install contingency-py`), which also compiles schedules written in [contingency-dsl](https://github.com/OperantKit/contingency-dsl).
+`schedule.step(now, event)` advances the clock to `now`; `event` is `Some(&ResponseEvent)` for a response or `None` for the passage of time, and `outcome.reinforced` says whether a reinforcer is delivered at `now`.
 
-## Why not a 50-line hand-written schedule?
+## What is included
 
-A short hand-rolled loop usually gets the following wrong, and each one changes the data you would report:
+| Area | Contents |
+|---|---|
+| Simple schedules | FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT, limited hold |
+| Compound schedules | Concurrent (with COD, fixed-ratio changeover, direction-specific COD), Multiple, Mixed, Chained, Tandem, Alternative, Conjunctive, Interpolate, Overlay, second-order |
+| Differential and progressive | DRO (resetting, momentary), DRL, DRH, percentile, progressive ratio (arithmetic, geometric, Richardson–Roberts), adjusting, interlocking |
+| Other procedures | Timeout, response cost, Sidman avoidance, discriminated avoidance, escape, matching-to-sample, go/no-go |
+| Value generators | Fleshler–Hoffman (Fleshler & Hoffman, 1962) and the Hantula (1991) variant, in `helpers::fleshler_hoffman` |
+| Hardware abstraction layer (`hw`) | An apparatus interface with a virtual backend and a serial-port backend (`serial` feature) |
+| HIL bridge | The `contingency-hil` binary: a TCP server that takes responses as newline-delimited JSON, runs a schedule, and sends reinforcers back (`contingency-hil --help`) |
+| Bindings | C (`include/contingency.h`, generated by cbindgen), Python (`python` feature, module `contingency_core`), WebAssembly (`wasm32` target), Swift/Kotlin (`uniffi` feature) |
+| jsPsych plugin | [`jspsych/`](jspsych/README.md): runs FR, VI, CRF, or EXT for one trial in the browser |
 
-- **Variable-schedule intervals.** VI/VR values are generated with the Fleshler-Hoffman (1962) progression (the Hantula, 1991, variant is also in `helpers::fleshler_hoffman`), not ad-hoc uniform or exponential draws. `n_intervals` and `seed` are explicit constructor arguments, so a run can be replayed exactly.
-- **Changeover delay in concurrent schedules.** `Concurrent` routes each response to the component keyed by its operandum, advances every other component with `None` so time-based components keep running, reinforces no response for `cod` time units after a changeover while holding any reinforcer set up meanwhile until the first response after the COD (Herrnstein, 1961), and supports a fixed-ratio changeover requirement (`frco`) and direction-specific COD (`Concurrent::with_extensions`).
-- **Conformance with the Python port.** `tests/conformance.rs` replays the 39 JSON fixtures of [contingency-py](https://github.com/OperantKit/contingency-py): every fixture, including the 8 seeded ones (VR, VI, RI, RR, VT, RT, and the trial-based MatchingToSample and GoNoGo), must match the Python `reinforced` flag and reinforcer (time, magnitude, label) bit for bit (within 1e-9), and a completeness test fails if a fixture is added without being replayed. The seeded fixtures replay exactly because `helpers::py_random::PyRandom` ports CPython's `random.Random` (MT19937 with the same seeding and sampling), so a given integer seed yields the same draws in both ports.
-- **Property tests.** 13 `proptest` properties in `tests/properties.rs` check invariants such as Fleshler-Hoffman mean preservation, seeded determinism of VR/VI/RR, DRL/DRH thresholds, and rejection of non-monotonic time.
-- **One engine, several hosts.** The same schedules are exposed through a C ABI (`include/contingency.h`, generated by cbindgen), PyO3 (`python` feature), WebAssembly (`wasm32` target), and UniFFI for Swift/Kotlin (`uniffi` feature). `tests/e2e_c_ffi.rs` compiles and runs a real C program against the library.
-- **Input validation.** Non-monotonic time returns `ContingencyError::State`; invalid parameters (for example a non-positive mean interval or fewer than two concurrent components) return `ContingencyError::Config`.
+Cargo features: `python`, `uniffi`, `serial`; none is on by default.
 
-## Semantic invariants (shared with Python port)
+The behavior the two engines share (time tolerance 1e-9, when each schedule starts timing, how COD gates reinforcement, and so on) is listed in section 5 of [the Python–Rust correspondence](docs/en/correspondence.md). The schedule interface is described in [protocol.md](docs/en/protocol.md).
 
-See `docs/en/correspondence.md` and the Python package's `docs/handoff-summary.md` for the full list. Notable:
+## Limitations
 
-- `TIME_TOL = 1e-9` applied uniformly to monotonic and event-time checks.
-- First-step anchoring: FT/VT/RT/DRO anchor on the first `step()`; FI/VI/RI anchor at construction.
-- `Concurrent` advances every component on every step; `Chained`/`Tandem` only step the active component.
-- COD gates only the event-matched component (tick-side reinforcements on other operanda pass through).
-- Momentary DRO uses a half-open window `[anchor, now)`.
-- `RR`/`RI`/`RT` snapshot the RNG state at construction so `reset()` replays the same draw sequence.
+- Not on crates.io; the API can still change.
+- No parser for contingency-dsl expressions. To run a schedule written as text, compile it with contingency-py, or build it here with `ScheduleBuilder`.
+- `contingency-hil` drops `stimulus` messages, and it ignores `reinforcer` messages sent by the host.
+- The jsPsych plugin supports FR, VI, CRF, and EXT only.
+
+## Development
+
+```sh
+git clone https://github.com/OperantKit/contingency-rs
+git clone https://github.com/OperantKit/contingency-py   # the conformance tests read ../contingency-py/conformance/
+cd contingency-rs
+cargo test
+```
+
+The Rust code blocks in both READMEs run as doctests (`cargo test --doc`).
 
 ## References
 
-- Ferster, C. B., & Skinner, B. F. (1957). *Schedules of reinforcement*. Appleton-Century-Crofts.
-- Fleshler, M., & Hoffman, H. S. (1962). A progression for generating variable-interval schedules. *JEAB*, 5(4), 529-530. https://doi.org/10.1901/jeab.1962.5-529
-- Hantula, D. A. (1991). A simple BASIC program to generate values for variable-interval schedules of reinforcement. *JABA*, 24(4), 799-801.
-- Catania, A. C. (1966). Concurrent operants. In W. K. Honig (Ed.), *Operant behavior* (pp. 213-270). Appleton-Century-Crofts.
-- Herrnstein, R. J. (1961). Relative and absolute strength of response as a function of frequency of reinforcement. *JEAB*, 4(3), 267-272. https://doi.org/10.1901/jeab.1961.4-267
-- Reynolds, G. S. (1961). Behavioral contrast. *JEAB*, 4(1), 57-71.
-- Hodos, W. (1961). Progressive ratio as a measure of reward strength. *Science*, 134, 943-944.
-- Hursh, S. R. (1980). Economic concepts for the analysis of behavior. *JEAB*, 34(2), 219-238.
+- Fleshler, M., & Hoffman, H. S. (1962). A progression for generating variable-interval schedules. *Journal of the Experimental Analysis of Behavior*, 5(4), 529-530. https://doi.org/10.1901/jeab.1962.5-529
+- Hantula, D. A. (1991). A simple BASIC program to generate values for variable-interval schedules of reinforcement. *Journal of Applied Behavior Analysis*, 24(4), 799-801. https://doi.org/10.1901/jaba.1991.24-799
 
 ## License
 
