@@ -43,7 +43,7 @@ A schedule is driven by `schedule.step(now, event)`; `event` is `Some(&ResponseE
 
 ## Related packages
 
-- [contingency-py](https://github.com/OperantKit/contingency-py): Python engine and executable specification; owns the shared conformance fixtures (`pip install contingency-py`)
+- [contingency-py](https://github.com/OperantKit/contingency-py): Python engine and executable specification; owns the shared conformance fixtures
 - [contingency-dsl](https://github.com/OperantKit/contingency-dsl): the schedule language specification (grammar, AST schema, conformance cases)
-- [contingency-dsl-py](https://github.com/OperantKit/contingency-dsl-py): Python parser for the DSL (`pip install contingency-dsl-py`)
-- [session-runner](https://github.com/OperantKit/session-runner): runs a schedule as a full session against a virtual or hardware apparatus (`pip install session-runner`)
+- [contingency-dsl-py](https://github.com/OperantKit/contingency-dsl-py): Python parser for the DSL
+- [session-runner](https://github.com/OperantKit/session-runner): runs a schedule as a full session against a virtual or hardware apparatus
