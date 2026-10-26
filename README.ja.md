@@ -64,6 +64,7 @@ fn main() -> contingency::Result<()> {
 | 値の生成 | Fleshler–Hoffman（Fleshler & Hoffman, 1962）と Hantula (1991) の変法。`helpers::fleshler_hoffman` にあります |
 | ハードウェア抽象化層（`hw`） | 装置のインタフェースと、仮想の装置、シリアルポート接続（`serial` 機能） |
 | HIL ブリッジ | `contingency-hil` バイナリ。改行区切りの JSON で反応を受け取り、スケジュールを動かして強化子を送り返す TCP サーバです（`contingency-hil --help`） |
+| シリアルの HIL 実行 | `contingency-hil-serial` バイナリ（`serial` 機能）。シリアル接続で機器に CRF を回し、機器が測った遅れの記録を受け取る、ホスト側の時間計測用の道具です（`contingency-hil-serial --help`） |
 | バインディング | C（`include/contingency.h`、cbindgen で生成）、Python（`python` 機能、モジュール名 `contingency_core`）、WebAssembly（`wasm32` ターゲット）、Swift/Kotlin（`uniffi` 機能） |
 | jsPsych プラグイン | [`jspsych/`](jspsych/README.ja.md): ブラウザで 1 試行のあいだ FR・VI・CRF・EXT を動かします |
 

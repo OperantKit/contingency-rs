@@ -274,6 +274,7 @@ dependencies = [
  "clap",
  "getrandom 0.2.17",
  "indexmap",
+ "libc",
  "proptest",
  "pyo3",
  "serde",
