@@ -36,9 +36,11 @@ compile_error!("feature `c-runtime` is for `no_std` builds; build with --no-defa
 mod c_runtime;
 pub mod schedule;
 pub mod schedules;
+pub mod spec;
 pub mod types;
 
 pub use builder::ScheduleBuilder;
+pub use spec::from_spec;
 
 #[cfg(feature = "python")]
 pub mod python;
