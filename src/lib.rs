@@ -14,9 +14,11 @@ pub mod helpers;
 pub mod hw;
 pub mod schedule;
 pub mod schedules;
+pub mod spec;
 pub mod types;
 
 pub use builder::ScheduleBuilder;
+pub use spec::from_spec;
 
 #[cfg(feature = "python")]
 pub mod python;
