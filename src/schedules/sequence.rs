@@ -54,8 +54,11 @@
 //! Experimental Analysis of Behavior*, 4(1), 57-71.
 //! <https://doi.org/10.1901/jeab.1961.4-57>
 
-use std::collections::HashSet;
-use std::fmt;
+#[allow(unused_imports)]
+use crate::prelude::*;
+
+use alloc::collections::BTreeSet;
+use core::fmt;
 
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -93,7 +96,7 @@ fn validate_stimuli(stimuli: Option<Vec<String>>, n_components: usize) -> Result
             n_components
         )));
     }
-    let unique: HashSet<&String> = names.iter().collect();
+    let unique: BTreeSet<&String> = names.iter().collect();
     if unique.len() != names.len() {
         return Err(ContingencyError::Config(format!(
             "stimulus names must be unique, got {names:?}"

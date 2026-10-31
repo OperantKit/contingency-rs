@@ -24,6 +24,9 @@
 //! Ferster, C. B., & Skinner, B. F. (1957). *Schedules of
 //! reinforcement* (pp. 508-509). Appleton-Century-Crofts.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
 use crate::types::{MetaValue, Outcome, Reinforcer, ResponseEvent};

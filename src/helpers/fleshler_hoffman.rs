@@ -20,6 +20,9 @@
 //! correction sums with [`fsum`] (correctly rounded, like `math.fsum`)
 //! and integer rounding is round-half-to-even (like Python `round`).
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use super::py_random::PyRandom;
 
 fn make_rng(seed: Option<u64>) -> PyRandom {
@@ -43,7 +46,7 @@ fn fsum(values: &[f64]) -> f64 {
         for j in 0..partials.len() {
             let mut y = partials[j];
             if x.abs() < y.abs() {
-                std::mem::swap(&mut x, &mut y);
+                core::mem::swap(&mut x, &mut y);
             }
             let hi = x + y;
             let lo = y - (hi - x);

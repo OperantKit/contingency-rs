@@ -14,6 +14,9 @@
 //! reinforcement. *Journal of the Experimental Analysis of Behavior*,
 //! 5(2), 213-223. <https://doi.org/10.1901/jeab.1962.5-213>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;

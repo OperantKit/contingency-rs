@@ -4,8 +4,11 @@
 //! unit-agnostic `f64` on a monotonic clock — unit is declared by the
 //! caller (typically the DSL meta or `experiment-io`).
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
+use alloc::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// A response emitted by the subject at `time`.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

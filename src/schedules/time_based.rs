@@ -45,6 +45,9 @@
 //!   Analysis of Behavior*, 11(4), 405-414.
 //!   <https://doi.org/10.1901/jeab.1968.11-405>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::py_random::PyRandom;
 
 use crate::{

@@ -55,9 +55,10 @@
 //! the Experimental Analysis of Behavior*, 4(3), 267-272.
 //! <https://doi.org/10.1901/jeab.1961.4-267>
 
-use std::collections::VecDeque;
+#[allow(unused_imports)]
+use crate::prelude::*;
 
-use indexmap::IndexMap;
+use alloc::collections::VecDeque;
 
 use crate::{
     constants::TIME_TOL,
@@ -126,8 +127,8 @@ pub struct Concurrent {
     pending: IndexMap<String, VecDeque<Reinforcer>>,
 }
 
-impl std::fmt::Debug for Concurrent {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Concurrent {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Concurrent")
             .field("components", &self.components.keys().collect::<Vec<_>>())
             .field("cod", &self.cod)
@@ -266,7 +267,7 @@ impl Concurrent {
             active_cod: cod,
             consecutive_new_count: 0,
             last_now: None,
-            pending: IndexMap::new(),
+            pending: IndexMap::default(),
         })
     }
 

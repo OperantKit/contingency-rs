@@ -15,6 +15,7 @@ crate-type = ["rlib", "cdylib", "staticlib"]
 [[bin]]
 name = "contingency-hil"
 path = "src/bin/hil.rs"
+required-features = ["std"]
 
 [[bin]]
 name = "contingency-hil-serial"
@@ -27,13 +28,16 @@ path = "src/bin/uniffi_bindgen.rs"
 required-features = ["uniffi"]
 
 [dependencies]
-getrandom = "0.2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-thiserror = "1"
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-indexmap = "2"
+# The schedule core builds without `std` (`--no-default-features`, needs
+# `alloc`). Everything that needs an OS sits behind the `std` feature.
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+thiserror = { version = "2", default-features = false }
+indexmap = { version = "2", default-features = false }
+libm = "0.2"
+getrandom = { version = "0.2", optional = true }
+anyhow = { version = "1", optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
 pyo3 = { version = "0.22", optional = true, features = ["extension-module", "abi3-py38"] }
 uniffi = { version = "0.28", optional = true, features = ["cli"] }
 serialport = { version = "4", optional = true }
@@ -45,10 +49,25 @@ getrandom = { version = "0.2", features = ["js"] }
 serde-wasm-bindgen = "0.6"
 
 [features]
-default = []
-python = ["dep:pyo3"]
-uniffi = ["dep:uniffi"]
-serial = ["dep:serialport", "dep:libc"]
+default = ["std"]
+std = [
+    "serde/std",
+    "serde_json/std",
+    "thiserror/std",
+    "indexmap/std",
+    "dep:getrandom",
+    "dep:anyhow",
+    "dep:clap",
+]
+# `no_std` only: a global allocator over the C library's malloc/free and
+# a panic handler that calls abort(), so the staticlib can be linked into
+# C/C++ firmware (e.g. Teensyduino). Cargo builds every listed crate type,
+# staticlib included, even when this crate is a dependency, so a no_std
+# build needs these two items here, not in the embedding crate.
+c-runtime = []
+python = ["std", "dep:pyo3"]
+uniffi = ["std", "dep:uniffi"]
+serial = ["std", "dep:serialport", "dep:libc"]
 
 [build-dependencies]
 cbindgen = "0.27"

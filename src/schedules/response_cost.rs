@@ -17,6 +17,9 @@
 //! behavior. *Journal of the Experimental Analysis of Behavior*, 5(2),
 //! 201-208. <https://doi.org/10.1901/jeab.1962.5-201>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
@@ -35,8 +38,8 @@ pub struct ResponseCost {
     last_now: Option<f64>,
 }
 
-impl std::fmt::Debug for ResponseCost {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for ResponseCost {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ResponseCost")
             .field("amount", &self.amount)
             .field("unit", &self.unit)

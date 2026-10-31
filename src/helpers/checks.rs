@@ -5,6 +5,9 @@
 //! five places (monotonic check, event/now match, elapsed check, DRH
 //! eviction, LimitedHold expire) — this module covers the first two.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::{constants::TIME_TOL, errors::ContingencyError, types::ResponseEvent, Result};
 
 /// Assert that `now` does not move backwards relative to `last_now`

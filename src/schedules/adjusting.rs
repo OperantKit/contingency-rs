@@ -15,6 +15,9 @@
 //! effect of delay and of intervening events on reinforcement value*
 //! (pp. 55-73). Lawrence Erlbaum Associates.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};

@@ -28,6 +28,9 @@
 //! Skinner, B. F. (1957). *Schedules of reinforcement* (with C. B.
 //! Ferster). Appleton-Century-Crofts.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::py_random::PyRandom;
 
 use crate::errors::ContingencyError;

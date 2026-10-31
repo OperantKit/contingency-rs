@@ -38,6 +38,9 @@
 //! evaluate reinforcing efficacy. *Journal of Neuroscience Methods*,
 //! 66(1), 1-11. <https://doi.org/10.1016/0165-0270(95)00153-0>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
@@ -252,8 +255,8 @@ pub struct ProgressiveRatio {
     last_now: Option<f64>,
 }
 
-impl std::fmt::Debug for ProgressiveRatio {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for ProgressiveRatio {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("ProgressiveRatio")
             .field("current_index", &self.current_index)
             .field("counter", &self.counter)

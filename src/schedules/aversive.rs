@@ -26,6 +26,9 @@
 //! Acquisition in normal dogs. *Psychological Monographs: General and
 //! Applied*, 67(4), 1-19. <https://doi.org/10.1037/h0093649>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};

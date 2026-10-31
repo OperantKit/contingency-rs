@@ -5,7 +5,8 @@
 //! Python consumers. All methods return `Box<dyn Schedule>` so the
 //! facade is compositional.
 
-use indexmap::IndexMap;
+#[allow(unused_imports)]
+use crate::prelude::*;
 
 use crate::schedules::{self, DroMode, LimitedHold, ProgressiveRatio};
 use crate::{Result, Schedule};

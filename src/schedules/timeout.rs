@@ -14,6 +14,9 @@
 //! *Psychological Bulletin*, 64(6), 428-441.
 //! <https://doi.org/10.1037/h0022657>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -41,8 +44,8 @@ pub struct Timeout {
     last_now: Option<f64>,
 }
 
-impl std::fmt::Debug for Timeout {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Timeout {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Timeout")
             .field("duration", &self.duration)
             .field("reset_on_response", &self.reset_on_response)

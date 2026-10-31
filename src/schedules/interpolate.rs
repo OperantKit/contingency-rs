@@ -21,6 +21,9 @@
 //! *Journal of the Experimental Analysis of Behavior*, 11(3s),
 //! 327-383. <https://doi.org/10.1901/jeab.1968.11-s327>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -39,8 +42,8 @@ pub struct Interpolate {
     last_now: Option<f64>,
 }
 
-impl std::fmt::Debug for Interpolate {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Interpolate {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Interpolate")
             .field("interval", &self.interval)
             .field("probe_duration", &self.probe_duration)

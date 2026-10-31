@@ -14,6 +14,9 @@
 //! - CPython `Modules/_randommodule.c` and `Lib/random.py`
 //!   (<https://github.com/python/cpython>).
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 const N: usize = 624;
 const M: usize = 397;
 const MATRIX_A: u32 = 0x9908_b0df;
@@ -30,8 +33,8 @@ pub struct PyRandom {
     index: usize,
 }
 
-impl std::fmt::Debug for PyRandom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for PyRandom {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("PyRandom")
             .field("state[0..4]", &&self.state[..4])
             .field("index", &self.index)
@@ -60,13 +63,20 @@ impl PyRandom {
     pub fn from_optional_seed(seed: Option<u64>) -> Self {
         match seed {
             Some(s) => Self::from_seed(s),
+            #[cfg(feature = "std")]
             None => Self::from_entropy(),
+            // There is no OS entropy without `std`: an unseeded schedule
+            // is a caller error there (load paths must require a seed).
+            #[cfg(not(feature = "std"))]
+            None => panic!("PyRandom: a seed is required without the `std` feature"),
         }
     }
 
     /// Equivalent to `random.Random()` (seeded from OS entropy).
     ///
     /// Falls back to the system clock when OS entropy is unavailable.
+    /// Requires the `std` feature.
+    #[cfg(feature = "std")]
     pub fn from_entropy() -> Self {
         let mut bytes = [0u8; N * 4];
         let key: Vec<u32> = if getrandom::getrandom(&mut bytes).is_ok() {

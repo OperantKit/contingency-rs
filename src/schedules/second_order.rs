@@ -24,6 +24,9 @@
 //! W. K. Honig (Ed.), *Operant behavior: Areas of research and
 //! application* (pp. 160-212). Appleton-Century-Crofts.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
 use crate::types::{MetaValue, Outcome, ResponseEvent};
@@ -40,8 +43,8 @@ pub struct SecondOrder {
     unit_completions: u64,
 }
 
-impl std::fmt::Debug for SecondOrder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for SecondOrder {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("SecondOrder")
             .field("last_now", &self.last_now)
             .field("unit_completions", &self.unit_completions)

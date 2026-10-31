@@ -10,7 +10,9 @@ no_includes = true
 sys_includes = ["stdint.h", "stdbool.h", "stddef.h"]
 
 [export]
-exclude = ["Schedule", "ArmableSchedule", "Outcome", "Reinforcer", "ResponseEvent", "ContingencyError"]
+# The C-library functions declared in `src/c_runtime.rs` are imports, not
+# part of the C API.
+exclude = ["Schedule", "ArmableSchedule", "Outcome", "Reinforcer", "ResponseEvent", "ContingencyError", "malloc", "memalign", "free", "abort"]
 
 [parse]
 parse_deps = false

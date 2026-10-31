@@ -30,7 +30,10 @@
 //! packages. *The American Statistician*, 50(4), 361-365.
 //! <https://doi.org/10.1080/00031305.1996.10473566>
 
-use std::collections::VecDeque;
+#[allow(unused_imports)]
+use crate::prelude::*;
+
+use alloc::collections::VecDeque;
 
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
@@ -170,7 +173,7 @@ impl Schedule for Percentile {
 
         // Compare first, then update (response not in its own reference).
         let mut sorted: Vec<f64> = self.window.iter().copied().collect();
-        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+        sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
         let threshold = percentile_linear(&sorted, self.rank);
 
         let eligible = match self.direction {

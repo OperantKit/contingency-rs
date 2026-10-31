@@ -7,6 +7,9 @@
 //!
 //! Mirrors `contingency.interfaces.Schedule` in Python.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::{Outcome, ResponseEvent, Result};
 
 /// A reinforcement schedule.

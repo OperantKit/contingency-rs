@@ -3,10 +3,13 @@
 //! Mirrors the Python `contingency.errors` hierarchy:
 //! `ContingencyError { Config, State, Hardware }`.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use thiserror::Error;
 
 /// Crate-level `Result` alias.
-pub type Result<T> = std::result::Result<T, ContingencyError>;
+pub type Result<T> = core::result::Result<T, ContingencyError>;
 
 /// Errors raised by schedule construction, stepping, or HAL I/O.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]

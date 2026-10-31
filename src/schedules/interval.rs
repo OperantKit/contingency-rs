@@ -47,6 +47,9 @@
 //!   *Journal of the Experimental Analysis of Behavior*, 21(3),
 //!   389-408. <https://doi.org/10.1901/jeab.1974.21-389>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};

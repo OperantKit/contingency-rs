@@ -37,7 +37,10 @@
 //!   variables. In W. K. Honig & J. E. R. Staddon (Eds.), *Handbook of
 //!   operant behavior* (pp. 201-232). Prentice-Hall.
 
-use std::collections::VecDeque;
+#[allow(unused_imports)]
+use crate::prelude::*;
+
+use alloc::collections::VecDeque;
 
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;

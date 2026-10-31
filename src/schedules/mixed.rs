@@ -18,6 +18,9 @@
 //! Ferster, C. B., & Skinner, B. F. (1957). *Schedules of
 //! reinforcement* (pp. 623-626). Appleton-Century-Crofts.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
@@ -38,8 +41,8 @@ pub struct Mixed {
     clocks: ComponentClocks,
 }
 
-impl std::fmt::Debug for Mixed {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for Mixed {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("Mixed")
             .field("n_components", &self.components.len())
             .field("active", &self.active)

@@ -25,6 +25,9 @@
 //! *Journal of the Experimental Analysis of Behavior*, 12(3), 475-480.
 //! <https://doi.org/10.1901/jeab.1969.12-475>
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::py_random::PyRandom;
 
 use crate::constants::TIME_TOL;
@@ -96,8 +99,8 @@ pub struct MatchingToSample {
     pending_outcome_label: Option<&'static str>,
 }
 
-impl std::fmt::Debug for MatchingToSample {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for MatchingToSample {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("MatchingToSample")
             .field("n_comparisons", &self.n_comparisons)
             .field("sample_duration", &self.sample_duration)
@@ -235,7 +238,7 @@ impl MatchingToSample {
         }
         let sub = self.incorrect.as_mut().unwrap().step(now, None)?;
         self.pending_outcome_label = None;
-        let mut meta = std::collections::BTreeMap::new();
+        let mut meta = alloc::collections::BTreeMap::new();
         meta.insert("phase".into(), MetaValue::Str("iti".into()));
         meta.insert(
             "trial_index".into(),
@@ -263,7 +266,7 @@ impl MatchingToSample {
         };
 
         if correct && sched_slot.is_none() {
-            let mut meta = std::collections::BTreeMap::new();
+            let mut meta = alloc::collections::BTreeMap::new();
             meta.insert("phase".into(), MetaValue::Str("iti".into()));
             meta.insert(
                 "trial_index".into(),
@@ -277,7 +280,7 @@ impl MatchingToSample {
             });
         }
         if sched_slot.is_none() {
-            let mut meta = std::collections::BTreeMap::new();
+            let mut meta = alloc::collections::BTreeMap::new();
             meta.insert("phase".into(), MetaValue::Str("iti".into()));
             meta.insert(
                 "trial_index".into(),
@@ -291,7 +294,7 @@ impl MatchingToSample {
             });
         }
         let sub = sched_slot.as_mut().unwrap().step(now, Some(event))?;
-        let mut meta = std::collections::BTreeMap::new();
+        let mut meta = alloc::collections::BTreeMap::new();
         meta.insert("phase".into(), MetaValue::Str("iti".into()));
         meta.insert(
             "trial_index".into(),
@@ -415,8 +418,8 @@ pub struct GoNoGo {
     pending_outcome_label: Option<&'static str>,
 }
 
-impl std::fmt::Debug for GoNoGo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Debug for GoNoGo {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.debug_struct("GoNoGo")
             .field("go_probability", &self.go_probability)
             .field("response_window", &self.response_window)
@@ -559,7 +562,7 @@ impl GoNoGo {
         };
 
         if is_go && target_slot.is_none() {
-            let mut meta = std::collections::BTreeMap::new();
+            let mut meta = alloc::collections::BTreeMap::new();
             meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
             meta.insert(
                 "trial_index".into(),
@@ -573,7 +576,7 @@ impl GoNoGo {
             });
         }
         if target_slot.is_none() {
-            let mut meta = std::collections::BTreeMap::new();
+            let mut meta = alloc::collections::BTreeMap::new();
             meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
             meta.insert(
                 "trial_index".into(),
@@ -587,7 +590,7 @@ impl GoNoGo {
             });
         }
         let sub = target_slot.as_mut().unwrap().step(now, Some(event))?;
-        let mut meta = std::collections::BTreeMap::new();
+        let mut meta = alloc::collections::BTreeMap::new();
         meta.insert("phase".into(), MetaValue::Str(phase_snapshot.into()));
         meta.insert(
             "trial_index".into(),
@@ -627,7 +630,7 @@ impl Schedule for GoNoGo {
                             if let Some(sched) = self.correct_nogo_schedule.as_mut() {
                                 let sub = sched.step(boundary, None)?;
                                 let trial_idx = self.trial_index;
-                                let mut meta = std::collections::BTreeMap::new();
+                                let mut meta = alloc::collections::BTreeMap::new();
                                 meta.insert("phase".into(), MetaValue::Str("nogo".into()));
                                 meta.insert("trial_index".into(), MetaValue::Int(trial_idx as i64));
                                 meta.insert(

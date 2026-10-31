@@ -22,6 +22,9 @@
 //! (Ed.), *Operant behavior: Areas of research and application*
 //! (pp. 380-447). Appleton-Century-Crofts.
 
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
 use crate::types::{MetaValue, Outcome, Reinforcer, ResponseEvent};
