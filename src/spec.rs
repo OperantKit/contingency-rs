@@ -47,7 +47,9 @@
 //! assert!(schedule.step(1.0, Some(&ev)).unwrap().reinforced);
 //! ```
 
-use indexmap::IndexMap;
+#[allow(unused_imports)]
+use crate::prelude::*;
+
 use serde_json::{Map, Value};
 
 use crate::schedules::{
@@ -202,7 +204,7 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
 
         // --- compound ---------------------------------------------------
         "Concurrent" => {
-            let mut components: IndexMap<String, Box<dyn Schedule>> = IndexMap::new();
+            let mut components: IndexMap<String, Box<dyn Schedule>> = IndexMap::default();
             for (key, cspec) in p.req_object("components")? {
                 components.insert(key.clone(), nested(ty, "components", cspec)?);
             }
