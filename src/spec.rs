@@ -57,7 +57,7 @@ use crate::schedules::{
     Alternative, Chained, Concurrent, Conjunctive, DiscriminatedAvoidance, DroMode, Escape, GoNoGo,
     InterlockingSchedule, Interpolate, LimitedHold, MatchingToSample, Mixed, Multiple, Overlay,
     Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost, SecondOrder,
-    Sidman, Tandem, Timeout, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
+    Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
 };
 use crate::{ContingencyError, Result, Schedule};
 
@@ -309,6 +309,10 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
             p.opt_schedule("incorrect")?,
             p.opt_f64("iti")?.unwrap_or(1.0),
             p.opt_u64("seed")?,
+        )?
+        .with_trial_types(
+            p.opt_trial_types("trial_types")?,
+            p.opt_trial_types("probe_trial_types")?,
         )?),
         "GoNoGo" => Box::new(GoNoGo::new(
             p.opt_f64("go_probability")?.unwrap_or(0.5),
@@ -512,6 +516,40 @@ impl<'a> Params<'a> {
                 x.as_str()
                     .map(str::to_string)
                     .ok_or_else(|| self.wrong_type(key, "an array of strings", v))
+            })
+            .collect::<Result<Vec<_>>>()
+            .map(Some)
+    }
+
+    /// An array of `{sample, correct, comparisons}` objects, as
+    /// `MatchingToSample.trial_types` / `probe_trial_types` take.
+    fn opt_trial_types(&self, key: &str) -> Result<Option<Vec<TrialType>>> {
+        const EXPECTED: &str = "an array of {sample, correct, comparisons} objects";
+        let Some(v) = self.get(key) else {
+            return Ok(None);
+        };
+        let arr = v.as_array().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        arr.iter()
+            .map(|t| {
+                let obj = t.as_object().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+                let text = |field: &str| {
+                    obj.get(field)
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                        .ok_or_else(|| self.wrong_type(key, EXPECTED, v))
+                };
+                let comparisons = obj
+                    .get("comparisons")
+                    .and_then(Value::as_array)
+                    .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?
+                    .iter()
+                    .map(|c| {
+                        c.as_str()
+                            .map(str::to_string)
+                            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(TrialType::new(text("sample")?, text("correct")?, comparisons))
             })
             .collect::<Result<Vec<_>>>()
             .map(Some)

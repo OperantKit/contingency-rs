@@ -123,6 +123,7 @@ files are binding glue or shared utilities. The `bridge/` module
 | `ProgressiveRatio` + `arithmetic` / `geometric` / `richardson_roberts` | `schedules::ProgressiveRatio` + 3 free fns returning `Box<dyn StepFn>` |
 | `Sidman`, `DiscriminatedAvoidance`, `Escape` | `schedules::{Sidman, DiscriminatedAvoidance, Escape}` |
 | `MatchingToSample`, `GoNoGo` | `schedules::{MatchingToSample, GoNoGo}` |
+| `TrialType` (frozen dataclass; `comparisons: tuple[str, ...]`) | `schedules::TrialType` (`comparisons: Vec<String>`; set via `MatchingToSample::with_trial_types`) |
 
 ### 2.3 DSL bridge
 

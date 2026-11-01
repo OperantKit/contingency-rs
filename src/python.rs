@@ -156,6 +156,7 @@ impl PyOutcome {
                 MetaValue::Int(i) => dict.set_item(key, i)?,
                 MetaValue::Float(f) => dict.set_item(key, f)?,
                 MetaValue::Str(s) => dict.set_item(key, s)?,
+                MetaValue::StrList(v) => dict.set_item(key, v)?,
             }
         }
         Ok(dict)

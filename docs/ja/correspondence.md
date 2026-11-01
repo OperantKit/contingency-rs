@@ -123,6 +123,7 @@ Rust 専用ファイルは binding glue または共通ユーティリティ。
 | `ProgressiveRatio` + `arithmetic` / `geometric` / `richardson_roberts` | `schedules::ProgressiveRatio` + 3 つの自由関数（`Box<dyn StepFn>` を返す） |
 | `Sidman`, `DiscriminatedAvoidance`, `Escape` | `schedules::{Sidman, DiscriminatedAvoidance, Escape}` |
 | `MatchingToSample`, `GoNoGo` | `schedules::{MatchingToSample, GoNoGo}` |
+| `TrialType`（frozen dataclass。`comparisons: tuple[str, ...]`） | `schedules::TrialType`（`comparisons: Vec<String>`。`MatchingToSample::with_trial_types` で設定） |
 
 ### 2.3 DSL ブリッジ
 

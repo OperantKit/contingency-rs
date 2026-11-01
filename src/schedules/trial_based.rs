@@ -70,11 +70,74 @@ enum MtsPhase {
     Iti,
 }
 
+/// One MTS trial type: a sample, its correct comparison, and the full
+/// comparison set (exactly `n_comparisons` distinct stimuli).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrialType {
+    /// Sample stimulus name.
+    pub sample: String,
+    /// Comparison that is correct for this sample.
+    pub correct: String,
+    /// Comparison stimuli presented on the trial.
+    pub comparisons: Vec<String>,
+}
+
+impl TrialType {
+    /// Construct a trial type.
+    pub fn new<S, C, I, T>(sample: S, correct: C, comparisons: I) -> Self
+    where
+        S: Into<String>,
+        C: Into<String>,
+        I: IntoIterator<Item = T>,
+        T: Into<String>,
+    {
+        Self {
+            sample: sample.into(),
+            correct: correct.into(),
+            comparisons: comparisons.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+fn validate_trial_types(name: &str, types: &[TrialType], n_comparisons: u32) -> Result<()> {
+    for tt in types {
+        if tt.comparisons.len() != n_comparisons as usize {
+            return Err(ContingencyError::Config(format!(
+                "{name}: trial type for sample {:?} must have {n_comparisons} comparisons, got {}",
+                tt.sample,
+                tt.comparisons.len()
+            )));
+        }
+        for (i, c) in tt.comparisons.iter().enumerate() {
+            if tt.comparisons[..i].contains(c) {
+                return Err(ContingencyError::Config(format!(
+                    "{name}: duplicate comparison {c:?} for sample {:?}",
+                    tt.sample
+                )));
+            }
+        }
+        if !tt.comparisons.contains(&tt.correct) {
+            return Err(ContingencyError::Config(format!(
+                "{name}: correct {:?} is not among the comparisons for sample {:?}",
+                tt.correct, tt.sample
+            )));
+        }
+    }
+    Ok(())
+}
+
+type Meta = alloc::collections::BTreeMap<String, MetaValue>;
+
 /// Matching-to-sample (MTS) discrete-trial schedule.
 ///
 /// A trial unfolds as `sample -> choice -> iti`. Comparison stimuli are
 /// exposed as operanda `choice_0 ... choice_{N-1}`; exactly one is
 /// designated correct (sampled uniformly at random at trial start).
+///
+/// With [`MatchingToSample::with_trial_types`], each block presents every
+/// baseline and probe trial type once in a shuffled order, and the
+/// comparison positions are shuffled at the start of each trial. Probe
+/// trials are scored but never consequated.
 ///
 /// # References
 ///
@@ -97,6 +160,12 @@ pub struct MatchingToSample {
     correct_operandum: String,
     last_now: Option<f64>,
     pending_outcome_label: Option<&'static str>,
+    trial_types: Option<Vec<TrialType>>,
+    n_baseline_types: usize,
+    block_order: Vec<usize>,
+    block_pos: usize,
+    current_type_index: Option<usize>,
+    current_positions: Vec<String>,
 }
 
 impl core::fmt::Debug for MatchingToSample {
@@ -109,6 +178,9 @@ impl core::fmt::Debug for MatchingToSample {
             .field("phase", &self.phase)
             .field("trial_index", &self.trial_index)
             .field("correct_operandum", &self.correct_operandum)
+            .field("trial_types", &self.trial_types)
+            .field("n_baseline_types", &self.n_baseline_types)
+            .field("current_type_index", &self.current_type_index)
             .finish()
     }
 }
@@ -154,7 +226,67 @@ impl MatchingToSample {
             correct_operandum: correct,
             last_now: None,
             pending_outcome_label: None,
+            trial_types: None,
+            n_baseline_types: 0,
+            block_order: Vec::new(),
+            block_pos: 0,
+            current_type_index: None,
+            current_positions: Vec::new(),
         })
+    }
+
+    /// Attach baseline and probe trial types.
+    ///
+    /// `None` for `trial_types` keeps the default behaviour (one correct
+    /// operandum drawn uniformly per trial); `probe_trial_types` then must
+    /// also be `None`. The random stream restarts from the seed so the
+    /// first trial matches a schedule constructed with trial types.
+    pub fn with_trial_types(
+        mut self,
+        trial_types: Option<Vec<TrialType>>,
+        probe_trial_types: Option<Vec<TrialType>>,
+    ) -> Result<Self> {
+        let Some(baseline) = trial_types else {
+            if probe_trial_types.is_some() {
+                return Err(ContingencyError::Config(
+                    "probe_trial_types requires trial_types".into(),
+                ));
+            }
+            return Ok(self);
+        };
+        if baseline.is_empty() {
+            return Err(ContingencyError::Config(
+                "trial_types must contain at least one trial type".into(),
+            ));
+        }
+        validate_trial_types("trial_types", &baseline, self.n_comparisons)?;
+        let probes = probe_trial_types.unwrap_or_default();
+        validate_trial_types("probe_trial_types", &probes, self.n_comparisons)?;
+        self.n_baseline_types = baseline.len();
+        let mut all = baseline;
+        all.extend(probes);
+        self.trial_types = Some(all);
+        self.rng = make_rng(self.seed);
+        self.clear_block();
+        self.correct_operandum = self.pick_correct();
+        Ok(self)
+    }
+
+    /// Sample of the current trial; `None` without trial types.
+    pub fn current_sample(&self) -> Option<&str> {
+        let types = self.trial_types.as_ref()?;
+        self.current_type_index.map(|i| types[i].sample.as_str())
+    }
+
+    /// Comparisons of the current trial in position order (`choice_0` first).
+    pub fn current_comparisons(&self) -> &[String] {
+        &self.current_positions
+    }
+
+    /// Whether the current trial is a probe (unconsequated) trial.
+    pub fn is_probe_trial(&self) -> bool {
+        self.current_type_index
+            .is_some_and(|i| i >= self.n_baseline_types)
     }
 
     /// Number of comparison stimuli per trial.
@@ -186,9 +318,66 @@ impl MatchingToSample {
         self.iti
     }
 
+    fn clear_block(&mut self) {
+        self.block_order.clear();
+        self.block_pos = 0;
+        self.current_type_index = None;
+        self.current_positions.clear();
+    }
+
     fn pick_correct(&mut self) -> String {
-        let idx = self.rng.randbelow(self.n_comparisons as u64);
+        let Some(types) = self.trial_types.as_ref() else {
+            let idx = self.rng.randbelow(self.n_comparisons as u64);
+            return format!("choice_{idx}");
+        };
+        if self.block_pos >= self.block_order.len() {
+            let mut order: Vec<usize> = (0..types.len()).collect();
+            self.rng.shuffle(&mut order);
+            self.block_order = order;
+            self.block_pos = 0;
+        }
+        let type_index = self.block_order[self.block_pos];
+        self.block_pos += 1;
+        let tt = &types[type_index];
+        let mut positions = tt.comparisons.clone();
+        self.rng.shuffle(&mut positions);
+        // Validation guarantees `correct` is among the comparisons.
+        let idx = positions.iter().position(|c| *c == tt.correct).unwrap_or(0);
+        self.current_type_index = Some(type_index);
+        self.current_positions = positions;
         format!("choice_{idx}")
+    }
+
+    fn choice_name(&self, operandum: &str) -> Option<String> {
+        let suffix = operandum.strip_prefix("choice_")?;
+        if suffix.is_empty() || !suffix.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        let idx: usize = suffix.parse().ok()?;
+        self.current_positions.get(idx).cloned()
+    }
+
+    fn meta(&self, trial_outcome: Option<&str>) -> Meta {
+        let mut meta = Meta::new();
+        meta.insert("phase".into(), MetaValue::Str(self.phase().into()));
+        meta.insert(
+            "trial_index".into(),
+            MetaValue::Int(self.trial_index as i64),
+        );
+        if let Some(lbl) = trial_outcome {
+            meta.insert("trial_outcome".into(), MetaValue::Str(lbl.into()));
+        }
+        if let (Some(types), Some(i)) = (self.trial_types.as_ref(), self.current_type_index) {
+            let tt = &types[i];
+            meta.insert("sample".into(), MetaValue::Str(tt.sample.clone()));
+            meta.insert(
+                "comparisons".into(),
+                MetaValue::StrList(self.current_positions.clone()),
+            );
+            meta.insert("correct".into(), MetaValue::Str(tt.correct.clone()));
+            meta.insert("probe".into(), MetaValue::Bool(self.is_probe_trial()));
+        }
+        meta
     }
 
     fn begin_trial(&mut self, now: f64) {
@@ -218,33 +407,35 @@ impl MatchingToSample {
     }
 
     fn phase_only_outcome(&mut self) -> Outcome {
-        let mut out = Outcome::empty();
-        out.meta
-            .insert("phase".into(), MetaValue::Str(self.phase().into()));
-        out.meta.insert(
-            "trial_index".into(),
-            MetaValue::Int(self.trial_index as i64),
-        );
-        if let Some(lbl) = self.pending_outcome_label.take() {
-            out.meta
-                .insert("trial_outcome".into(), MetaValue::Str(lbl.into()));
+        let label = self.pending_outcome_label.take();
+        Outcome {
+            reinforced: false,
+            reinforcer: None,
+            meta: self.meta(label),
         }
-        out
+    }
+
+    fn unreinforced(meta: Meta) -> Outcome {
+        Outcome {
+            reinforced: false,
+            reinforcer: None,
+            meta,
+        }
     }
 
     fn incorrect_timeout_outcome(&mut self, now: f64) -> Result<Outcome> {
-        if self.incorrect.is_none() {
+        if self.trial_types.is_some() {
+            self.pending_outcome_label = None;
+            let meta = self.meta(Some("incorrect"));
+            if self.is_probe_trial() || self.incorrect.is_none() {
+                return Ok(Self::unreinforced(meta));
+            }
+        } else if self.incorrect.is_none() {
             return Ok(self.phase_only_outcome());
         }
+        let meta = self.meta(Some("incorrect"));
         let sub = self.incorrect.as_mut().unwrap().step(now, None)?;
         self.pending_outcome_label = None;
-        let mut meta = alloc::collections::BTreeMap::new();
-        meta.insert("phase".into(), MetaValue::Str("iti".into()));
-        meta.insert(
-            "trial_index".into(),
-            MetaValue::Int(self.trial_index as i64),
-        );
-        meta.insert("trial_outcome".into(), MetaValue::Str("incorrect".into()));
         Ok(Outcome {
             reinforced: sub.reinforced,
             reinforcer: sub.reinforcer,
@@ -257,55 +448,37 @@ impl MatchingToSample {
         let label = if correct { "correct" } else { "incorrect" };
         self.enter_iti(now, label);
         self.pending_outcome_label = None;
-
-        let use_consequence = correct;
-        let sched_slot = if use_consequence {
+        let mut meta = self.meta(Some(label));
+        if self.trial_types.is_some() {
+            if let Some(name) = self.choice_name(&event.operandum) {
+                meta.insert("choice".into(), MetaValue::Str(name));
+            }
+            if self.is_probe_trial() {
+                // Probe trials are scored but never consequated.
+                return Ok(Self::unreinforced(meta));
+            }
+        }
+        let sched_slot = if correct {
             &mut self.consequence
         } else {
             &mut self.incorrect
         };
-
-        if correct && sched_slot.is_none() {
-            let mut meta = alloc::collections::BTreeMap::new();
-            meta.insert("phase".into(), MetaValue::Str("iti".into()));
-            meta.insert(
-                "trial_index".into(),
-                MetaValue::Int(self.trial_index as i64),
-            );
-            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
-            return Ok(Outcome {
+        match sched_slot.as_mut() {
+            None if correct => Ok(Outcome {
                 reinforced: true,
                 reinforcer: Some(Reinforcer::at(now)),
                 meta,
-            });
+            }),
+            None => Ok(Self::unreinforced(meta)),
+            Some(sched) => {
+                let sub = sched.step(now, Some(event))?;
+                Ok(Outcome {
+                    reinforced: sub.reinforced,
+                    reinforcer: sub.reinforcer,
+                    meta,
+                })
+            }
         }
-        if sched_slot.is_none() {
-            let mut meta = alloc::collections::BTreeMap::new();
-            meta.insert("phase".into(), MetaValue::Str("iti".into()));
-            meta.insert(
-                "trial_index".into(),
-                MetaValue::Int(self.trial_index as i64),
-            );
-            meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
-            return Ok(Outcome {
-                reinforced: false,
-                reinforcer: None,
-                meta,
-            });
-        }
-        let sub = sched_slot.as_mut().unwrap().step(now, Some(event))?;
-        let mut meta = alloc::collections::BTreeMap::new();
-        meta.insert("phase".into(), MetaValue::Str("iti".into()));
-        meta.insert(
-            "trial_index".into(),
-            MetaValue::Int(self.trial_index as i64),
-        );
-        meta.insert("trial_outcome".into(), MetaValue::Str(label.into()));
-        Ok(Outcome {
-            reinforced: sub.reinforced,
-            reinforcer: sub.reinforcer,
-            meta,
-        })
     }
 }
 
@@ -370,8 +543,8 @@ impl Schedule for MatchingToSample {
         };
         self.phase_started = None;
         self.trial_index = 0;
-        let idx = self.rng.randbelow(self.n_comparisons as u64);
-        self.correct_operandum = format!("choice_{idx}");
+        self.clear_block();
+        self.correct_operandum = self.pick_correct();
         self.last_now = None;
         self.pending_outcome_label = None;
         if let Some(c) = self.consequence.as_mut() {
@@ -929,6 +1102,163 @@ mod tests {
         let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
         let r = ev("choice_0", 2.0);
         assert!(mts.step(1.0, Some(&r)).is_err());
+    }
+
+    // ---- MTS trial types -------------------------------------------------
+
+    fn ab_types() -> Vec<TrialType> {
+        let b = ["B1", "B2", "B3"];
+        ["A1", "A2", "A3"]
+            .iter()
+            .zip(b.iter())
+            .map(|(s, c)| TrialType::new(*s, *c, b))
+            .collect()
+    }
+
+    fn ba_types() -> Vec<TrialType> {
+        let a = ["A1", "A2", "A3"];
+        ["B1", "B2", "B3"]
+            .iter()
+            .zip(a.iter())
+            .map(|(s, c)| TrialType::new(*s, *c, a))
+            .collect()
+    }
+
+    fn mts_ab_ba(seed: u64) -> MatchingToSample {
+        MatchingToSample::new(3, 0.0, 2.0, None, None, 1.0, Some(seed))
+            .unwrap()
+            .with_trial_types(Some(ab_types()), Some(ba_types()))
+            .unwrap()
+    }
+
+    #[test]
+    fn mts_trial_types_block_order_matches_python() {
+        // Expected values come from contingency-py with the same seed.
+        let want: [(&str, [&str; 3], &str, bool); 7] = [
+            ("A1", ["B2", "B1", "B3"], "choice_1", false),
+            ("A3", ["B2", "B1", "B3"], "choice_2", false),
+            ("B1", ["A1", "A3", "A2"], "choice_0", true),
+            ("B3", ["A2", "A1", "A3"], "choice_2", true),
+            ("B2", ["A3", "A2", "A1"], "choice_1", true),
+            ("A2", ["B1", "B2", "B3"], "choice_1", false),
+            ("B3", ["A1", "A2", "A3"], "choice_2", true),
+        ];
+        let mut mts = mts_ab_ba(3);
+        let mut t = 0.0;
+        for (sample, comps, correct, probe) in want {
+            assert_eq!(mts.current_sample(), Some(sample));
+            let got: Vec<&str> = mts.current_comparisons().iter().map(String::as_str).collect();
+            assert_eq!(got, comps);
+            assert_eq!(mts.correct_operandum(), correct);
+            assert_eq!(mts.is_probe_trial(), probe);
+            let r = ev(correct, t);
+            let out = mts.step(t, Some(&r)).unwrap();
+            assert_eq!(out.reinforced, !probe);
+            t += 1.0;
+            mts.step(t, None).unwrap();
+        }
+    }
+
+    #[test]
+    fn mts_trial_types_meta_keys() {
+        let mut mts = mts_ab_ba(3);
+        let r = ev("choice_0", 0.0);
+        let out = mts.step(0.0, Some(&r)).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("sample"), Some(&MetaValue::Str("A1".into())));
+        assert_eq!(out.meta.get("correct"), Some(&MetaValue::Str("B1".into())));
+        assert_eq!(out.meta.get("choice"), Some(&MetaValue::Str("B2".into())));
+        assert_eq!(out.meta.get("probe"), Some(&MetaValue::Bool(false)));
+        assert_eq!(
+            out.meta.get("comparisons"),
+            Some(&MetaValue::StrList(vec!["B2".into(), "B1".into(), "B3".into()]))
+        );
+        assert_eq!(
+            out.meta.get("trial_outcome"),
+            Some(&MetaValue::Str("incorrect".into()))
+        );
+    }
+
+    #[test]
+    fn mts_default_meta_has_no_trial_type_keys() {
+        let mut mts = MatchingToSample::new(2, 0.0, 5.0, None, None, 1.0, Some(1)).unwrap();
+        let op = mts.correct_operandum().to_string();
+        let out = mts.step(0.0, Some(&ev(&op, 0.0))).unwrap();
+        assert!(out.meta.get("sample").is_none());
+        assert!(out.meta.get("choice").is_none());
+        assert_eq!(mts.current_sample(), None);
+        assert!(!mts.is_probe_trial());
+    }
+
+    #[test]
+    fn mts_probe_does_not_step_nested_schedules() {
+        // FR 2 consequence: if the probe trial stepped it, the next
+        // baseline correct choice would be reinforced.
+        let mut mts = MatchingToSample::new(3, 0.0, 2.0, Some(Box::new(FR::new(2).unwrap())), None, 1.0, Some(3))
+            .unwrap()
+            .with_trial_types(Some(ab_types()), Some(ba_types()))
+            .unwrap();
+        let mut t = 0.0;
+        let mut reinforced = Vec::new();
+        for _ in 0..6 {
+            let op = mts.correct_operandum().to_string();
+            let out = mts.step(t, Some(&ev(&op, t))).unwrap();
+            reinforced.push(out.reinforced);
+            t += 1.0;
+            mts.step(t, None).unwrap();
+        }
+        // Baseline correct trials are 0, 1, 5; FR 2 fires on the second.
+        assert_eq!(reinforced, [false, true, false, false, false, false]);
+    }
+
+    #[test]
+    fn mts_probe_timeout_does_not_step_incorrect() {
+        let mut mts = MatchingToSample::new(3, 0.0, 2.0, None, Some(Box::new(FT::new(0.0001).unwrap())), 1.0, Some(3))
+            .unwrap()
+            .with_trial_types(Some(ab_types()), Some(ba_types()))
+            .unwrap();
+        // Trial 0 and 1 are baseline; answer them, then let probe trial 2 time out.
+        for t in [0.0, 2.0] {
+            let op = mts.correct_operandum().to_string();
+            mts.step(t, Some(&ev(&op, t))).unwrap();
+        }
+        mts.step(3.0, None).unwrap();
+        assert!(mts.is_probe_trial());
+        let out = mts.step(5.5, None).unwrap();
+        assert!(!out.reinforced);
+        assert_eq!(out.meta.get("trial_outcome"), Some(&MetaValue::Str("incorrect".into())));
+        assert!(out.meta.get("choice").is_none());
+    }
+
+    #[test]
+    fn mts_trial_types_reset_restarts_block() {
+        let mut mts = mts_ab_ba(3);
+        for t in [0.0, 2.0, 4.0] {
+            let op = mts.correct_operandum().to_string();
+            mts.step(t, Some(&ev(&op, t))).unwrap();
+        }
+        mts.reset();
+        assert_eq!(mts.current_sample(), Some("A1"));
+        assert_eq!(mts.correct_operandum(), "choice_1");
+    }
+
+    #[test]
+    fn mts_trial_types_validation() {
+        let base = || MatchingToSample::new(3, 0.0, 2.0, None, None, 1.0, Some(1)).unwrap();
+        assert!(base().with_trial_types(Some(vec![]), None).is_err());
+        assert!(base().with_trial_types(None, Some(ba_types())).is_err());
+        assert!(base()
+            .with_trial_types(Some(vec![TrialType::new("A1", "B1", ["B1", "B2"])]), None)
+            .is_err());
+        assert!(base()
+            .with_trial_types(Some(vec![TrialType::new("A1", "B9", ["B1", "B2", "B3"])]), None)
+            .is_err());
+        assert!(base()
+            .with_trial_types(Some(vec![TrialType::new("A1", "B1", ["B1", "B1", "B3"])]), None)
+            .is_err());
+        assert!(base()
+            .with_trial_types(Some(ab_types()), Some(vec![TrialType::new("B1", "A1", ["A1", "A2"])]))
+            .is_err());
     }
 
     // ---- GoNoGo construction --------------------------------------------
