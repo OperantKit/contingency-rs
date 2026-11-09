@@ -322,7 +322,7 @@ Rust 側 HAL テストカバレッジ：
 
 - `tests/hw_virtual_tests.rs` — 16 テスト
 - `tests/hw_serial_tests.rs` — 12 テスト
-- `tests/hil_integration.rs` — 2 テスト（`contingency-hil` バイナリを起動し、TCP/JSONL で駆動）
+- `tests/hil_integration.rs` — 7 テスト（`contingency-hil` バイナリを起動し、TCP/JSONL で駆動。`spec::SPEC_TYPES` の全種でセッションを開き、VI・VR・並立の強化を通信越しに確かめる）
 
 Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）は
 `BY_DESIGN`。Rust で HIL ループのホスト役を担う場合は `Apparatus`

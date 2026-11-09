@@ -324,7 +324,7 @@ Rust-side HAL test coverage:
 
 - `tests/hw_virtual_tests.rs` — 16 tests
 - `tests/hw_serial_tests.rs` — 12 tests
-- `tests/hil_integration.rs` — 2 tests (spawns `contingency-hil` binary, drives it over TCP/JSONL)
+- `tests/hil_integration.rs` — 7 tests (spawns `contingency-hil` binary, drives it over TCP/JSONL; starts a session for every `spec::SPEC_TYPES` entry and checks VI, VR, and Concurrent reinforcement over the wire)
 
 Gap G3 (Python `HilBridgeApparatus` host-side helper missing in Rust)
 is `BY_DESIGN`: Rust consumers hosting a HIL loop run the `Apparatus`

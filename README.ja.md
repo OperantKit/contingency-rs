@@ -63,7 +63,7 @@ fn main() -> contingency::Result<()> {
 | その他の手続き | タイムアウト、反応コスト、Sidman 型回避、弁別回避、逃避、見本合わせ、Go/No-Go |
 | 値の生成 | Fleshler–Hoffman（Fleshler & Hoffman, 1962）と Hantula (1991) の変法。`helpers::fleshler_hoffman` にあります |
 | ハードウェア抽象化層（`hw`） | 装置のインタフェースと、仮想の装置、シリアルポート接続（`serial` 機能） |
-| HIL ブリッジ | `contingency-hil` バイナリ。改行区切りの JSON で反応を受け取り、スケジュールを動かして強化子を送り返す TCP サーバです（`contingency-hil --help`） |
+| HIL ブリッジ | `contingency-hil` バイナリ。改行区切りの JSON で反応を受け取り、スケジュールを動かして強化子を送り返す TCP サーバです。スケジュールは JSON の spec で渡し、`spec::from_spec` で組み立てるので、この表のスケジュールはどれも動かせます（`contingency-hil --help`） |
 | シリアルの HIL 実行 | `contingency-hil-serial` バイナリ（`serial` 機能）。シリアル接続で機器に CRF を回し、機器が測った遅れの記録を受け取る、ホスト側の時間計測用の道具です（`contingency-hil-serial --help`） |
 | バインディング | C（`include/contingency.h`、cbindgen で生成）、Python（`python` 機能、モジュール名 `contingency_core`）、WebAssembly（`wasm32` ターゲット）、Swift/Kotlin（`uniffi` 機能） |
 | jsPsych プラグイン | [`jspsych/`](jspsych/README.ja.md): ブラウザで 1 試行のあいだ FR・VI・CRF・EXT を動かします |
@@ -77,6 +77,7 @@ Cargo の機能（feature）は `python`・`uniffi`・`serial` で、既定で�
 - crates.io に登録されておらず、API は変わることがあります。
 - contingency-dsl の式を読むパーサはありません。文字で書いたスケジュールを動かすには contingency-py で組み立てるか、ここで `ScheduleBuilder` を使って組み立てます。
 - `contingency-hil` は `stimulus` メッセージを捨て、ホストから送られた `reinforcer` メッセージも無視します。
+- `contingency-hil` がスケジュールを進めるのは `response` メッセージが届いたときだけです。時間が経ったことを伝えるメッセージが無いので、時間で強化するスケジュール（FT・VT・RT など）が反応と反応のあいだに出すはずの強化子は送られません。
 - jsPsych プラグインが扱えるのは FR・VI・CRF・EXT だけです。
 
 ## 開発

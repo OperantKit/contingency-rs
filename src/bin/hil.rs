@@ -24,7 +24,16 @@
 //!   - `{"type": "reinforcer", "time": <f64>, "channel": "<name>",
 //!      "magnitude": <f64>, "label": "<name>"}`
 //!
-//! Unknown `type` values are silently dropped for forward compatibility.
+//! The schedule is built once at start-up by
+//! [`contingency::spec::from_spec`], so every schedule type in
+//! [`contingency::spec::SPEC_TYPES`] is available; a spec it rejects
+//! makes the binary exit with an error before it listens. The schedule
+//! is stepped only when a `response` arrives — there is no clock tick on
+//! the wire, so time-only events (e.g. FT/VT/RT deliveries) are not
+//! emitted between responses.
+//!
+//! Unknown message `type` values are silently dropped for forward
+//! compatibility.
 //! JSON parse errors on individual lines are dropped and the stream
 //! continues. EOF on the reader closes the session cleanly.
 
@@ -35,8 +44,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 
-use contingency::schedules;
-use contingency::{ResponseEvent, Schedule};
+use contingency::{from_spec, ResponseEvent, Schedule};
 
 /// Default reinforcer channel emitted when none is otherwise specified.
 const DEFAULT_CHANNEL: &str = "food";
@@ -61,89 +69,14 @@ struct Cli {
 
     /// Schedule spec as JSON. Shape mirrors `contingency-py`'s
     /// conformance `schedule` field, e.g. `{"type":"FR","params":{"n":5}}`.
+    /// Any spec `type` that `contingency::spec::from_spec` accepts works,
+    /// including nested compound schedules.
     #[arg(long)]
     schedule: Option<String>,
 
     /// Path to a schedule spec JSON file (alternative to `--schedule`).
     #[arg(long, conflicts_with = "schedule")]
     schedule_file: Option<PathBuf>,
-}
-
-fn build_schedule(spec: &Value) -> Result<Box<dyn Schedule>> {
-    let ty = spec
-        .get("type")
-        .and_then(Value::as_str)
-        .ok_or_else(|| anyhow!("schedule spec missing 'type' string"))?;
-    let params = spec.get("params").cloned().unwrap_or(Value::Null);
-
-    match ty {
-        "CRF" => Ok(Box::new(schedules::crf())),
-        "EXT" => Ok(Box::new(schedules::EXT::new())),
-        "FR" => {
-            let n = params
-                .get("n")
-                .and_then(Value::as_u64)
-                .ok_or_else(|| anyhow!("FR requires integer 'n'"))?;
-            Ok(Box::new(schedules::FR::new(n)?))
-        }
-        "FI" => {
-            let interval = params
-                .get("interval")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| anyhow!("FI requires float 'interval'"))?;
-            Ok(Box::new(schedules::FI::new(interval)?))
-        }
-        "FT" => {
-            let interval = params
-                .get("interval")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| anyhow!("FT requires float 'interval'"))?;
-            Ok(Box::new(schedules::FT::new(interval)?))
-        }
-        "DRO" => {
-            let interval = params
-                .get("interval")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| anyhow!("DRO requires float 'interval'"))?;
-            let mode_str = params
-                .get("mode")
-                .and_then(Value::as_str)
-                .unwrap_or("resetting");
-            let mode = match mode_str {
-                "resetting" => schedules::DroMode::Resetting,
-                "momentary" => schedules::DroMode::Momentary,
-                other => {
-                    return Err(anyhow!(
-                        "DRO mode must be 'resetting' or 'momentary', got {other:?}"
-                    ))
-                }
-            };
-            Ok(Box::new(schedules::DRO::new(interval, mode)?))
-        }
-        "DRL" => {
-            let interval = params
-                .get("interval")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| anyhow!("DRL requires float 'interval'"))?;
-            Ok(Box::new(schedules::DRL::new(interval)?))
-        }
-        "DRH" => {
-            let n = params
-                .get("response_count")
-                .and_then(Value::as_u64)
-                .ok_or_else(|| anyhow!("DRH requires integer 'response_count'"))?;
-            let n =
-                u32::try_from(n).map_err(|_| anyhow!("DRH 'response_count' must fit in u32"))?;
-            let w = params
-                .get("time_window")
-                .and_then(Value::as_f64)
-                .ok_or_else(|| anyhow!("DRH requires float 'time_window'"))?;
-            Ok(Box::new(schedules::DRH::new(n, w)?))
-        }
-        other => Err(anyhow!(
-            "schedule type '{other}' not yet supported by the HIL binary"
-        )),
-    }
 }
 
 fn main() -> Result<()> {
@@ -159,7 +92,7 @@ fn main() -> Result<()> {
     };
 
     let spec: Value = serde_json::from_str(&spec_json).context("parsing schedule spec JSON")?;
-    let mut schedule = build_schedule(&spec).context("building schedule")?;
+    let mut schedule = from_spec(&spec).context("building schedule")?;
 
     let listener = TcpListener::bind((cli.host.as_str(), cli.port))
         .with_context(|| format!("binding {}:{}", cli.host, cli.port))?;
