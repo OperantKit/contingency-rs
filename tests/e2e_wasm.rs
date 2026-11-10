@@ -1,6 +1,7 @@
 //! E2E test: build the WASM bindings with `wasm-pack build --target
 //! nodejs`, write a tiny Node.js driver that imports the generated JS
-//! shim and exercises `Schedule.fr(3)`, then run it with `node`.
+//! shim and exercises `Schedule.fr(3)` and `Schedule.fromSpec`, then run
+//! it with `node`.
 //!
 //! This flavour avoids the dev-dep pull-in that `wasm-pack test` does
 //! (proptest + its getrandom versions don't build for wasm32 without
@@ -148,6 +149,29 @@ assert(c1.reinforced, 'CRF should reinforce every response');
 const ext = Schedule.ext();
 const e1 = ext.step(1.0, new ResponseEvent(1.0, 'main'));
 assert(!e1.reinforced, 'EXT should never reinforce');
+
+// FR(3) and Conc(VI 1, VI 1) built from spec JSON strings.
+const sfr = Schedule.fromSpec('{"type": "FR", "params": {"n": 3}}');
+const fired = [1, 2, 3].map((t) => sfr.step(t, new ResponseEvent(t, 'main')).reinforced);
+assert(JSON.stringify(fired) === '[false,false,true]', 'spec FR3 pattern: ' + fired);
+
+const sconc = Schedule.fromSpec(JSON.stringify({
+    type: 'Concurrent',
+    params: {
+        components: {
+            left: { type: 'VI', params: { mean_interval: 1.0, seed: 1 } },
+            right: { type: 'VI', params: { mean_interval: 1.0, seed: 2 } },
+        },
+        cod: 0.0,
+    },
+}));
+assert(sconc.step(100.0, new ResponseEvent(100.0, 'left')).reinforced, 'spec Conc left at t=100');
+assert(!sconc.step(100.001, new ResponseEvent(100.001, 'left')).reinforced, 'spec Conc left repeat');
+assert(sconc.step(100.002, new ResponseEvent(100.002, 'right')).reinforced, 'spec Conc right');
+
+let threw = false;
+try { Schedule.fromSpec('not json'); } catch (e) { threw = true; }
+assert(threw, 'fromSpec should throw on bad JSON');
 
 console.log('OK');
 "#,

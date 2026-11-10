@@ -199,3 +199,63 @@ fn concurrent_rejects_length_mismatch() {
         Err(e) => assert!(e.to_string().contains("length mismatch")),
     }
 }
+
+#[test]
+fn from_spec_builds_fr() {
+    let s = UniffiSchedule::from_spec(r#"{"type": "FR", "params": {"n": 3}}"#.into()).unwrap();
+    let fired: Vec<bool> = [1.0, 2.0, 3.0]
+        .iter()
+        .map(|&t| s.step(t, Some(response(t, "main"))).unwrap().reinforced)
+        .collect();
+    assert_eq!(fired, vec![false, false, true]);
+}
+
+#[test]
+fn from_spec_builds_concurrent_vi_vi() {
+    let s = UniffiSchedule::from_spec(
+        r#"{"type": "Concurrent", "params": {
+            "components": {
+                "left": {"type": "VI", "params": {"mean_interval": 1.0, "seed": 1}},
+                "right": {"type": "VI", "params": {"mean_interval": 1.0, "seed": 2}}
+            },
+            "cod": 0.0}}"#
+            .into(),
+    )
+    .unwrap();
+    assert!(
+        s.step(100.0, Some(response(100.0, "left")))
+            .unwrap()
+            .reinforced
+    );
+    assert!(
+        !s.step(100.001, Some(response(100.001, "left")))
+            .unwrap()
+            .reinforced
+    );
+    assert!(
+        s.step(100.002, Some(response(100.002, "right")))
+            .unwrap()
+            .reinforced
+    );
+    assert!(s.step(100.003, Some(response(100.003, "middle"))).is_err());
+}
+
+#[test]
+fn from_spec_rejects_bad_json_and_bad_spec() {
+    for bad in [
+        "not json",
+        r#"{"type": "NoSuchSchedule"}"#,
+        r#"{"type": "FR", "params": {"n": 0}}"#,
+    ] {
+        match UniffiSchedule::from_spec(bad.into()) {
+            Ok(_) => panic!("{bad:?} should be rejected"),
+            Err(e) => assert!(
+                matches!(
+                    e,
+                    contingency::uniffi_api::UniffiContingencyError::Config(_)
+                ),
+                "{bad:?} should be a Config error, got {e:?}"
+            ),
+        }
+    }
+}

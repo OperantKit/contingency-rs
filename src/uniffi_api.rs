@@ -236,6 +236,20 @@ impl UniffiSchedule {
         Ok(Self::wrap(schedules::FR::new(n)?))
     }
 
+    /// Build any schedule from a schedule spec given as a JSON string
+    /// (`{"type": ..., "params": {...}}`), the same format
+    /// [`crate::spec::from_spec`] accepts. Malformed JSON and rejected
+    /// specs are both reported as `Config` errors.
+    #[uniffi::constructor]
+    pub fn from_spec(spec_json: String) -> Result<Arc<Self>, UniffiContingencyError> {
+        let value: serde_json::Value = serde_json::from_str(&spec_json)
+            .map_err(|e| UniffiContingencyError::Config(format!("from_spec: invalid JSON: {e}")))?;
+        let inner = crate::spec::from_spec(&value)?;
+        Ok(Arc::new(Self {
+            inner: Mutex::new(inner),
+        }))
+    }
+
     /// Continuous Reinforcement (FR 1).
     #[uniffi::constructor]
     pub fn crf() -> Arc<Self> {

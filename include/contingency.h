@@ -296,6 +296,22 @@ OpkSchedule *opk_pr_geometric(uint32_t start, double ratio);
 OpkSchedule *opk_pr_richardson_roberts(void);
 
 /**
+ * Build any schedule from a schedule spec given as a JSON string
+ * (`{"type": ..., "params": {...}}`), the same format
+ * [`crate::spec::from_spec`] accepts.
+ *
+ * Returns an owned handle, or NULL on failure (NULL pointer, invalid
+ * UTF-8, malformed JSON, or a spec [`crate::spec::from_spec`]
+ * rejects); retrieve the error via [`opk_last_error_message`].
+ *
+ * # Safety
+ *
+ * `spec_json` must be NULL or a NUL-terminated UTF-8 string valid
+ * for the duration of the call. It is only borrowed.
+ */
+OpkSchedule *opk_from_spec(const char *spec_json);
+
+/**
  * Construct Alternative(first, second). Takes ownership of both
  * handles — caller MUST NOT free them separately. Handles remain
  * valid for the lifetime of the returned Alternative handle;

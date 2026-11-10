@@ -646,6 +646,45 @@ pub extern "C" fn opk_pr_richardson_roberts() -> *mut OpkSchedule {
 }
 
 // -----------------------------------------------------------------------
+// Spec entry point
+// -----------------------------------------------------------------------
+
+/// Build any schedule from a schedule spec given as a JSON string
+/// (`{"type": ..., "params": {...}}`), the same format
+/// [`crate::spec::from_spec`] accepts.
+///
+/// Returns an owned handle, or NULL on failure (NULL pointer, invalid
+/// UTF-8, malformed JSON, or a spec [`crate::spec::from_spec`]
+/// rejects); retrieve the error via [`opk_last_error_message`].
+///
+/// # Safety
+///
+/// `spec_json` must be NULL or a NUL-terminated UTF-8 string valid
+/// for the duration of the call. It is only borrowed.
+#[no_mangle]
+pub unsafe extern "C" fn opk_from_spec(spec_json: *const c_char) -> *mut OpkSchedule {
+    // SAFETY: caller contract propagated.
+    let text = match unsafe { cstr_to_string(spec_json) } {
+        Ok(t) => t,
+        Err(e) => {
+            set_last_error(format!("opk_from_spec: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    let value: serde_json::Value = match serde_json::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            set_last_error(format!("opk_from_spec: invalid JSON: {e}"));
+            return std::ptr::null_mut();
+        }
+    };
+    match handle_error(crate::spec::from_spec(&value)) {
+        Some(inner) => box_schedule_dyn(inner),
+        None => std::ptr::null_mut(),
+    }
+}
+
+// -----------------------------------------------------------------------
 // Compound: Alternative
 // -----------------------------------------------------------------------
 

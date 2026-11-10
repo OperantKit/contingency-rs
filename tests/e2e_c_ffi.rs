@@ -152,6 +152,39 @@ int main(void) {
     const char *msg = opk_last_error_message();
     if (msg == NULL) { fprintf(stderr, "no error message\n"); return 9; }
 
+    /* build FR 3 from a spec */
+    OpkSchedule *sfr = opk_from_spec("{\"type\": \"FR\", \"params\": {\"n\": 3}}");
+    if (!sfr) { fprintf(stderr, "opk_from_spec(FR): %s\n", opk_last_error_message()); return 10; }
+    for (int i = 1; i <= 3; ++i) {
+        int rc = opk_schedule_step(sfr, (double)i, true, (double)i, op, &out);
+        if (rc != 0) { fprintf(stderr, "spec FR step %d rc=%d\n", i, rc); return 11; }
+        if (out.reinforced != (i == 3)) { fprintf(stderr, "spec FR wrong at %d\n", i); return 12; }
+    }
+    opk_schedule_free(sfr);
+
+    /* build Conc(VI 1, VI 1) from a spec */
+    OpkSchedule *sconc = opk_from_spec(
+        "{\"type\": \"Concurrent\", \"params\": {\"components\": {"
+        "\"left\": {\"type\": \"VI\", \"params\": {\"mean_interval\": 1.0, \"seed\": 1}},"
+        "\"right\": {\"type\": \"VI\", \"params\": {\"mean_interval\": 1.0, \"seed\": 2}}"
+        "}, \"cod\": 0.0}}");
+    if (!sconc) { fprintf(stderr, "opk_from_spec(Conc): %s\n", opk_last_error_message()); return 13; }
+    if (opk_schedule_step(sconc, 100.0, true, 100.0, "left", &out) != 0 || !out.reinforced) {
+        fprintf(stderr, "spec Conc: left not reinforced at t=100\n"); return 14;
+    }
+    if (opk_schedule_step(sconc, 100.001, true, 100.001, "left", &out) != 0 || out.reinforced) {
+        fprintf(stderr, "spec Conc: left repeat reinforced\n"); return 15;
+    }
+    if (opk_schedule_step(sconc, 100.002, true, 100.002, "right", &out) != 0 || !out.reinforced) {
+        fprintf(stderr, "spec Conc: right not reinforced\n"); return 16;
+    }
+    opk_schedule_free(sconc);
+
+    opk_clear_last_error();
+    if (opk_from_spec("not json") != NULL || opk_last_error_message() == NULL) {
+        fprintf(stderr, "opk_from_spec(bad) should fail with a message\n"); return 17;
+    }
+
     printf("OK\n");
     return 0;
 }

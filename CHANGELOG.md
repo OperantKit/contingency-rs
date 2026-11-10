@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- `opk_from_spec` (C), `Schedule.fromSpec` (WebAssembly), and `UniffiSchedule::from_spec` (Swift/Kotlin) build any schedule from a schedule spec given as a JSON string, through `spec::from_spec`. The per-schedule constructors are unchanged.
+
 ### Changed
 
 - Seeded schedules (VR, VI, VT, RR, RI, RT, MatchingToSample, GoNoGo) and the Fleshler-Hoffman generators now draw from `helpers::py_random::PyRandom`, a port of CPython's `random.Random`, instead of `rand::rngs::SmallRng`. A seeded sequence is now bit-equivalent to `contingency-py` with the same seed. **The sequence produced by an existing seed changes**; runs recorded with an earlier build cannot be replayed from the seed alone.

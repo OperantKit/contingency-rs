@@ -263,6 +263,19 @@ fn uniffi_bindgen_emits_swift_and_kotlin() {
         found_kotlin_class,
         "no emitted .kt file mentioned `UniffiSchedule` with class/interface decl; files: {kotlin_files:?}"
     );
+    // The spec entry point surfaces as `UniffiSchedule.fromSpec(specJson)`.
+    let kotlin_has_from_spec = kotlin_files.iter().any(|f| {
+        std::fs::read_to_string(f)
+            .map(|s| {
+                s.contains("fun `fromSpec`(`specJson`: kotlin.String)")
+                    || s.contains("fun fromSpec(")
+            })
+            .unwrap_or(false)
+    });
+    assert!(
+        kotlin_has_from_spec,
+        "no emitted .kt file declares `fromSpec`; files: {kotlin_files:?}"
+    );
 
     // Cleanup on success.
     let _ = std::fs::remove_dir_all(&swift_out);

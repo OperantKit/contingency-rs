@@ -178,6 +178,23 @@ impl JsSchedule {
     }
 
     // ------------------------------------------------------------------
+    // Spec entry point
+    // ------------------------------------------------------------------
+
+    /// Build any schedule from a schedule spec given as a JSON string
+    /// (`{"type": ..., "params": {...}}`), the same format
+    /// `contingency::spec::from_spec` accepts. Throws on malformed JSON
+    /// or a rejected spec.
+    #[wasm_bindgen(js_name = "fromSpec")]
+    pub fn from_spec(spec_json: &str) -> Result<JsSchedule, JsValue> {
+        let value: serde_json::Value = serde_json::from_str(spec_json)
+            .map_err(|e| JsValue::from(JsError::new(&format!("fromSpec: invalid JSON: {e}"))))?;
+        Ok(Self::from_box(
+            crate::spec::from_spec(&value).map_err(err_to_js)?,
+        ))
+    }
+
+    // ------------------------------------------------------------------
     // Ratio family
     // ------------------------------------------------------------------
 

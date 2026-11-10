@@ -161,3 +161,93 @@ fn concurrent_round_trips() {
     // SAFETY: live handle.
     unsafe { opk_schedule_free(handle) };
 }
+
+// -----------------------------------------------------------------------
+// opk_from_spec
+// -----------------------------------------------------------------------
+
+/// Step `handle` once with a response on `operandum` at `t`.
+fn respond(handle: *mut OpkSchedule, t: f64, operandum: &str) -> (CIntRc, OpkOutcome) {
+    let op = CString::new(operandum).unwrap();
+    let mut out = empty_outcome();
+    // SAFETY: `handle` is live; `op` and `out` outlive the call.
+    let rc = unsafe { opk_schedule_step(handle, t, true, t, op.as_ptr(), &mut out) };
+    (rc, out)
+}
+
+type CIntRc = std::os::raw::c_int;
+
+#[test]
+fn from_spec_builds_fr() {
+    let spec = CString::new(r#"{"type": "FR", "params": {"n": 3}}"#).unwrap();
+    // SAFETY: `spec` is a valid NUL-terminated string for the call.
+    let handle = unsafe { opk_from_spec(spec.as_ptr()) };
+    assert!(
+        !handle.is_null(),
+        "opk_from_spec(FR 3) should return a handle"
+    );
+    let fired: Vec<bool> = (1..=3)
+        .map(|i| {
+            let (rc, out) = respond(handle, f64::from(i), "main");
+            assert_eq!(rc, 0);
+            out.reinforced
+        })
+        .collect();
+    assert_eq!(fired, vec![false, false, true]);
+    // SAFETY: live handle.
+    unsafe { opk_schedule_free(handle) };
+}
+
+#[test]
+fn from_spec_builds_concurrent_vi_vi() {
+    let spec = CString::new(
+        r#"{"type": "Concurrent", "params": {
+            "components": {
+                "left": {"type": "VI", "params": {"mean_interval": 1.0, "seed": 1}},
+                "right": {"type": "VI", "params": {"mean_interval": 1.0, "seed": 2}}
+            },
+            "cod": 0.0}}"#,
+    )
+    .unwrap();
+    // SAFETY: `spec` is a valid NUL-terminated string for the call.
+    let handle = unsafe { opk_from_spec(spec.as_ptr()) };
+    assert!(
+        !handle.is_null(),
+        "opk_from_spec(Conc VI VI) should return a handle"
+    );
+    // Both intervals have long elapsed at t=100: the first response on
+    // each operandum is reinforced; an immediate repeat on `left` is not.
+    let (rc, a) = respond(handle, 100.0, "left");
+    assert_eq!(rc, 0);
+    assert!(a.reinforced, "left VI should be armed at t=100");
+    let (rc, b) = respond(handle, 100.001, "left");
+    assert_eq!(rc, 0);
+    assert!(!b.reinforced, "left VI restarts after reinforcement");
+    let (rc, c) = respond(handle, 100.002, "right");
+    assert_eq!(rc, 0);
+    assert!(c.reinforced, "right VI runs independently of left");
+    // An operandum the spec did not name is a step error.
+    let (rc, _) = respond(handle, 100.003, "middle");
+    assert_ne!(rc, 0);
+    // SAFETY: live handle.
+    unsafe { opk_schedule_free(handle) };
+}
+
+#[test]
+fn from_spec_reports_bad_json_and_bad_spec() {
+    for bad in [
+        "not json",
+        r#"{"type": "NoSuchSchedule"}"#,
+        r#"{"type": "FR", "params": {"n": 0}}"#,
+    ] {
+        opk_clear_last_error();
+        let spec = CString::new(bad).unwrap();
+        // SAFETY: valid NUL-terminated string.
+        let handle = unsafe { opk_from_spec(spec.as_ptr()) };
+        assert!(handle.is_null(), "{bad:?} should be rejected");
+        let msg = opk_last_error_message();
+        assert!(!msg.is_null(), "{bad:?} should set an error message");
+    }
+    // SAFETY: NULL is the documented error case.
+    assert!(unsafe { opk_from_spec(std::ptr::null()) }.is_null());
+}
