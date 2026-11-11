@@ -9,3 +9,6 @@ pkg/
 .local/
 tmp/
 PLAN.md
+# Python bytecode from tests/python
+__pycache__/
+.pytest_cache/
