@@ -5,6 +5,7 @@
 ### Added
 
 - `opk_from_spec` (C), `Schedule.fromSpec` (WebAssembly), and `UniffiSchedule::from_spec` (Swift/Kotlin) build any schedule from a schedule spec given as a JSON string, through `spec::from_spec`. The per-schedule constructors are unchanged.
+- Python: `contingency_core.from_spec` and `Schedule.from_spec` build any schedule from a spec given as a dict or a JSON string; `contingency_core.SPEC_TYPES` lists the spec types. `Outcome`, `Reinforcer`, and `ResponseEvent` can be constructed with the same arguments and defaults as in contingency-py (`Outcome` validates `reinforced` against `reinforcer` the same way) and compare by value. `pyproject.toml` lets `maturin develop` build the module as the `contingency-core` distribution.
 
 ### Changed
 

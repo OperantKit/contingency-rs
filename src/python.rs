@@ -24,9 +24,12 @@
 // so the false positives are silenced crate-module-wide here.
 #![allow(clippy::useless_conversion)]
 
-use pyo3::exceptions::{PyRuntimeError, PyValueError};
+use std::collections::BTreeMap;
+
+use pyo3::basic::CompareOp;
+use pyo3::exceptions::{PyRuntimeError, PyTypeError, PyValueError};
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyType};
+use pyo3::types::{PyBool, PyDict, PyFloat, PyInt, PyList, PyString, PyTuple, PyType};
 use pyo3::wrap_pyfunction;
 
 use indexmap::IndexMap;
@@ -34,9 +37,19 @@ use indexmap::IndexMap;
 use crate::{
     schedule::ArmableSchedule,
     schedules::{self, DroMode, LimitedHold, ProgressiveRatio, StepFn},
+    spec,
     types::MetaValue,
     ContingencyError, Outcome, Reinforcer, ResponseEvent, Schedule,
 };
+
+/// Rich comparison for value objects: only `==` and `!=` are defined.
+fn eq_only(op: CompareOp, equal: bool, py: Python<'_>) -> PyObject {
+    match op {
+        CompareOp::Eq => equal.into_py(py),
+        CompareOp::Ne => (!equal).into_py(py),
+        _ => py.NotImplemented(),
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Error mapping
@@ -86,6 +99,13 @@ impl PyResponseEvent {
             self.inner.time, self.inner.operandum
         )
     }
+
+    fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: CompareOp, py: Python<'_>) -> PyObject {
+        match other.extract::<PyRef<'_, PyResponseEvent>>() {
+            Ok(o) => eq_only(op, self.inner == o.inner, py),
+            Err(_) => py.NotImplemented(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -100,6 +120,27 @@ struct PyReinforcer {
 
 #[pymethods]
 impl PyReinforcer {
+    /// Same signature and defaults as contingency-py's
+    /// ``Reinforcer(time, magnitude=1.0, label="SR+")``.
+    #[new]
+    #[pyo3(signature = (time, magnitude = 1.0, label = "SR+".to_string()))]
+    fn new(time: f64, magnitude: f64, label: String) -> Self {
+        Self {
+            inner: Reinforcer {
+                time,
+                magnitude,
+                label,
+            },
+        }
+    }
+
+    fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: CompareOp, py: Python<'_>) -> PyObject {
+        match other.extract::<PyRef<'_, PyReinforcer>>() {
+            Ok(o) => eq_only(op, self.inner == o.inner, py),
+            Err(_) => py.NotImplemented(),
+        }
+    }
+
     #[getter]
     fn time(&self) -> f64 {
         self.inner.time
@@ -132,8 +173,85 @@ struct PyOutcome {
     inner: Outcome,
 }
 
+/// Convert one Python meta value into a [`MetaValue`].
+///
+/// `bool` is checked before `int` because Python's `bool` is an `int`
+/// subclass. Lists and tuples must hold only strings.
+fn meta_value_from_py(key: &str, value: &Bound<'_, PyAny>) -> PyResult<MetaValue> {
+    if value.is_instance_of::<PyBool>() {
+        return Ok(MetaValue::Bool(value.extract()?));
+    }
+    if value.is_instance_of::<PyInt>() {
+        return Ok(MetaValue::Int(value.extract()?));
+    }
+    if value.is_instance_of::<PyFloat>() {
+        return Ok(MetaValue::Float(value.extract()?));
+    }
+    if value.is_instance_of::<PyString>() {
+        return Ok(MetaValue::Str(value.extract()?));
+    }
+    if value.is_instance_of::<PyList>() || value.is_instance_of::<PyTuple>() {
+        if let Ok(items) = value.extract::<Vec<String>>() {
+            return Ok(MetaValue::StrList(items));
+        }
+    }
+    Err(PyTypeError::new_err(format!(
+        "meta[{key:?}] must be bool, int, float, str or a list of str, got {}",
+        value.get_type().name()?
+    )))
+}
+
+fn meta_from_py(meta: Option<&Bound<'_, PyDict>>) -> PyResult<BTreeMap<String, MetaValue>> {
+    let mut out = BTreeMap::new();
+    if let Some(dict) = meta {
+        for (k, v) in dict.iter() {
+            let key: String = k
+                .extract()
+                .map_err(|_| PyTypeError::new_err("meta keys must be str"))?;
+            let value = meta_value_from_py(&key, &v)?;
+            out.insert(key, value);
+        }
+    }
+    Ok(out)
+}
+
 #[pymethods]
 impl PyOutcome {
+    /// Same signature, defaults and validation as contingency-py's
+    /// ``Outcome(reinforced=False, reinforcer=None, meta={})``.
+    #[new]
+    #[pyo3(signature = (reinforced = false, reinforcer = None, meta = None))]
+    fn new(
+        reinforced: bool,
+        reinforcer: Option<PyRef<'_, PyReinforcer>>,
+        meta: Option<&Bound<'_, PyDict>>,
+    ) -> PyResult<Self> {
+        if reinforced && reinforcer.is_none() {
+            return Err(PyValueError::new_err(
+                "reinforced=True requires a Reinforcer",
+            ));
+        }
+        if !reinforced && reinforcer.is_some() {
+            return Err(PyValueError::new_err(
+                "reinforcer must be None when reinforced=False",
+            ));
+        }
+        Ok(Self {
+            inner: Outcome {
+                reinforced,
+                reinforcer: reinforcer.map(|r| r.inner.clone()),
+                meta: meta_from_py(meta)?,
+            },
+        })
+    }
+
+    fn __richcmp__(&self, other: &Bound<'_, PyAny>, op: CompareOp, py: Python<'_>) -> PyObject {
+        match other.extract::<PyRef<'_, PyOutcome>>() {
+            Ok(o) => eq_only(op, self.inner == o.inner, py),
+            Err(_) => py.NotImplemented(),
+        }
+    }
+
     #[getter]
     fn reinforced(&self) -> bool {
         self.inner.reinforced
@@ -211,6 +329,14 @@ impl PySchedule {
     /// Return the schedule to its post-construction state.
     fn reset(&mut self) {
         self.inner.reset();
+    }
+
+    /// Build any schedule from a spec (``{"type": ..., "params": ...}``).
+    ///
+    /// Same as the module-level :func:`from_spec`.
+    #[classmethod]
+    fn from_spec(_cls: &Bound<'_, PyType>, spec: &Bound<'_, PyAny>) -> PyResult<Self> {
+        build_from_spec(spec)
     }
 
     // ------------------------------------------------------------------
@@ -596,6 +722,46 @@ fn pr_richardson_roberts() -> PyResult<PySchedule> {
 }
 
 // ---------------------------------------------------------------------------
+// Spec entry point
+// ---------------------------------------------------------------------------
+
+/// Parse a spec given as a JSON string or as a JSON-compatible Python
+/// value (dict / list / str / int / float / bool / None).
+fn spec_value_from_py(spec: &Bound<'_, PyAny>) -> PyResult<serde_json::Value> {
+    let text: String = if spec.is_instance_of::<PyString>() {
+        spec.extract()?
+    } else {
+        let json = spec.py().import_bound("json")?;
+        let kwargs = PyDict::new_bound(spec.py());
+        kwargs.set_item("allow_nan", false)?;
+        json.call_method("dumps", (spec,), Some(&kwargs))
+            .map_err(|e| {
+                PyValueError::new_err(format!("schedule spec is not JSON-serialisable: {e}"))
+            })?
+            .extract()?
+    };
+    serde_json::from_str(&text)
+        .map_err(|e| PyValueError::new_err(format!("schedule spec is not valid JSON: {e}")))
+}
+
+fn build_from_spec(spec: &Bound<'_, PyAny>) -> PyResult<PySchedule> {
+    let value = spec_value_from_py(spec)?;
+    let schedule = spec::from_spec(&value).map_err(map_err)?;
+    Ok(PySchedule::from_box(schedule))
+}
+
+/// Build any of the spec types (see ``SPEC_TYPES``) from a spec
+/// ``{"type": ..., "params": ...}`` given as a dict or a JSON string.
+///
+/// Raises ``ValueError`` when the spec is malformed or names an unknown
+/// type.
+#[pyfunction]
+#[pyo3(name = "from_spec")]
+fn py_from_spec(spec: &Bound<'_, PyAny>) -> PyResult<PySchedule> {
+    build_from_spec(spec)
+}
+
+// ---------------------------------------------------------------------------
 // Module entry
 // ---------------------------------------------------------------------------
 
@@ -611,5 +777,7 @@ fn contingency_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pr_arithmetic, m)?)?;
     m.add_function(wrap_pyfunction!(pr_geometric, m)?)?;
     m.add_function(wrap_pyfunction!(pr_richardson_roberts, m)?)?;
+    m.add_function(wrap_pyfunction!(py_from_spec, m)?)?;
+    m.add("SPEC_TYPES", PyTuple::new_bound(m.py(), spec::SPEC_TYPES))?;
     Ok(())
 }

@@ -1,0 +1,23 @@
+# Local build of the PyO3 extension module `contingency_core`:
+#
+#     maturin develop --features python
+#
+# The distribution is named `contingency-core` so that it never shadows
+# the `contingency` package of contingency-py in the same environment.
+[build-system]
+requires = ["maturin>=1.5,<2"]
+build-backend = "maturin"
+
+[project]
+name = "contingency-core"
+version = "0.1.0"
+description = "Python bindings (PyO3) for the contingency-rs reinforcement contingency engine."
+requires-python = ">=3.8"
+license = { text = "MIT" }
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.maturin]
+module-name = "contingency_core"
+features = ["python"]
