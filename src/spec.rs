@@ -32,7 +32,11 @@
 //! * `Concurrent` optionally takes `cod_directional`, an array of
 //!   `{"from", "to", "cod"}` objects (a repeated pair is rejected), and
 //!   `punish`, an object of operandum to schedule spec; both are passed
-//!   to [`Concurrent::with_extensions`].
+//!   to [`Concurrent::with_extensions`]. Changeover punishment is either
+//!   `punish_changeover` (one schedule spec shared by every changeover
+//!   direction) or `punish_directional` (an array of
+//!   `{"from", "to", "schedule"}` objects); giving both is rejected.
+//!   They are passed to [`Concurrent::with_changeover_punishment`].
 //!
 //! Every malformed spec — unknown type, missing or mistyped parameter —
 //! returns [`ContingencyError::Config`]; parameter values that the
@@ -59,13 +63,16 @@ use serde_json::{Map, Value};
 
 use crate::schedules::{
     arithmetic, crf, geometric, richardson_roberts, AdjustingSchedule, AdjustingTarget,
-    Alternative, Chained, Concurrent, Conjunctive, Correction, DiscriminatedAvoidance, DroMode,
-    Escape, GoNoGo, InterlockingSchedule, Interpolate, Lag, LimitedHold, MatchingToSample, Mixed,
-    Multiple, Overlay, Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio,
-    ResponseCost, SecondOrder, Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT,
-    RI, RR, RT, VI, VR, VT,
+    Alternative, Chained, ChangeoverPunish, Concurrent, Conjunctive, Correction,
+    DiscriminatedAvoidance, DroMode, Escape, GoNoGo, InterlockingSchedule, Interpolate, Lag,
+    LimitedHold, MatchingToSample, Mixed, Multiple, Overlay, Percentile, PercentileDirection,
+    PercentileTarget, ProgressiveRatio, ResponseCost, SecondOrder, Sidman, Tandem, Timeout,
+    TrialType, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
 };
 use crate::{ContingencyError, Result, Schedule};
+
+const CHANGEOVER_FORMS_CONFLICT: &str =
+    "\"punish_changeover\" and \"punish_directional\" cannot both be given";
 
 /// Every `type` tag that [`from_spec`] accepts, in the order of the
 /// spec tables (atomic, wrappers, differential, compound, progressive
@@ -230,13 +237,34 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
                     Some(out)
                 }
             };
-            Box::new(Concurrent::with_extensions(
+            let changeover = match (
+                p.get("punish_changeover").filter(|v| !v.is_null()),
+                p.get("punish_directional").filter(|v| !v.is_null()),
+            ) {
+                (Some(_), Some(_)) => {
+                    return Err(config(format!("{ty}: {CHANGEOVER_FORMS_CONFLICT}")));
+                }
+                (Some(cspec), None) => Some(ChangeoverPunish::All(nested(
+                    ty,
+                    "punish_changeover",
+                    cspec,
+                )?)),
+                (None, Some(_)) => Some(ChangeoverPunish::Directional(
+                    p.req_punish_directional("punish_directional")?,
+                )),
+                (None, None) => None,
+            };
+            let conc = Concurrent::with_extensions(
                 components,
                 p.opt_f64("cod")?.unwrap_or(0.0),
                 p.opt_u32("frco")?.unwrap_or(0),
                 p.opt_cod_directional("cod_directional")?,
                 punish,
-            )?)
+            )?;
+            Box::new(match changeover {
+                Some(cp) => conc.with_changeover_punishment(cp)?,
+                None => conc,
+            })
         }
         "Alternative" => Box::new(Alternative::new(
             p.req_schedule("first")?,
@@ -654,6 +682,44 @@ impl<'a> Params<'a> {
             out.insert(pair, cod);
         }
         Ok(Some(out))
+    }
+
+    fn req_punish_directional(
+        &self,
+        key: &str,
+    ) -> Result<IndexMap<(String, String), Box<dyn Schedule>>> {
+        const EXPECTED: &str = "an array of {from, to, schedule} objects";
+        let v = self
+            .get(key)
+            .ok_or_else(|| config(format!("{}: missing required param {key:?}", self.ty)))?;
+        let arr = v
+            .as_array()
+            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let mut out: IndexMap<(String, String), Box<dyn Schedule>> = IndexMap::default();
+        for entry in arr {
+            let obj = entry
+                .as_object()
+                .filter(|o| o.len() == 3)
+                .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+            let text = |field: &str| {
+                obj.get(field)
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .ok_or_else(|| self.wrong_type(key, EXPECTED, v))
+            };
+            let pair = (text("from")?, text("to")?);
+            let sspec = obj
+                .get("schedule")
+                .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+            if out.contains_key(&pair) {
+                return Err(config(format!(
+                    "{}: param {key:?} repeats the pair ({:?}, {:?})",
+                    self.ty, pair.0, pair.1
+                )));
+            }
+            out.insert(pair, nested(self.ty, key, sspec)?);
+        }
+        Ok(out)
     }
 
     fn opt_object(&self, key: &str) -> Result<Option<&'a Map<String, Value>>> {

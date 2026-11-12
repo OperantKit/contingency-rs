@@ -69,6 +69,32 @@ use crate::{
     Result,
 };
 
+/// Punishment of changeover responses in a [`Concurrent`].
+///
+/// A punishment schedule here receives a response only when that
+/// response confirms a changeover (the same test that arms COD; with
+/// FRCO it is the FRCO-th consecutive response on the new operandum).
+/// Every other step, including responses that do not change over, is a
+/// time tick for it.
+pub enum ChangeoverPunish {
+    /// One schedule shared by every changeover direction: with `FR 2`,
+    /// every second changeover overall is punished, whatever its
+    /// direction.
+    All(Box<dyn Schedule>),
+    /// One schedule per `(from, to)` direction; directions without an
+    /// entry are not punished.
+    Directional(IndexMap<(String, String), Box<dyn Schedule>>),
+}
+
+impl ChangeoverPunish {
+    fn schedules_mut(&mut self) -> Vec<&mut Box<dyn Schedule>> {
+        match self {
+            Self::All(s) => vec![s],
+            Self::Directional(map) => map.values_mut().collect(),
+        }
+    }
+}
+
 /// Concurrent schedule with changeover gating (COD + FRCO).
 ///
 /// Construct with an ordered map of component schedules keyed by
@@ -117,6 +143,7 @@ pub struct Concurrent {
     frco: u32,
     cod_directional: Option<IndexMap<(String, String), f64>>,
     punish: Option<IndexMap<String, Box<dyn Schedule>>>,
+    punish_changeover: Option<ChangeoverPunish>,
     last_operandum: Option<String>,
     switch_time: Option<f64>,
     active_cod: f64,
@@ -143,6 +170,13 @@ impl core::fmt::Debug for Concurrent {
             .field(
                 "punish",
                 &self.punish.as_ref().map(|m| m.keys().collect::<Vec<_>>()),
+            )
+            .field(
+                "punish_changeover",
+                &self.punish_changeover.as_ref().map(|c| match c {
+                    ChangeoverPunish::All(_) => vec![("*".to_string(), "*".to_string())],
+                    ChangeoverPunish::Directional(m) => m.keys().cloned().collect(),
+                }),
             )
             .field("last_operandum", &self.last_operandum)
             .field("switch_time", &self.switch_time)
@@ -262,6 +296,7 @@ impl Concurrent {
             frco,
             cod_directional,
             punish,
+            punish_changeover: None,
             last_operandum: None,
             switch_time: None,
             active_cod: cod,
@@ -269,6 +304,41 @@ impl Concurrent {
             last_now: None,
             pending: IndexMap::default(),
         })
+    }
+
+    /// Add punishment of changeover responses.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ContingencyError::Config`] if a directional key names
+    /// an operandum not in `components` or a self-transition. An empty
+    /// directional map is treated as no changeover punishment.
+    pub fn with_changeover_punishment(mut self, punish: ChangeoverPunish) -> Result<Self> {
+        if let ChangeoverPunish::Directional(map) = &punish {
+            if map.is_empty() {
+                self.punish_changeover = None;
+                return Ok(self);
+            }
+            for (from_op, to_op) in map.keys() {
+                if from_op == to_op {
+                    return Err(ContingencyError::Config(format!(
+                        "Concurrent changeover punishment rejects self-transition ({from_op:?}, {to_op:?})"
+                    )));
+                }
+                for op in [from_op, to_op] {
+                    if !self.components.contains_key(op) {
+                        let mut known: Vec<&str> =
+                            self.components.keys().map(|s| s.as_str()).collect();
+                        known.sort_unstable();
+                        return Err(ContingencyError::Config(format!(
+                            "Concurrent changeover punishment references unknown operandum {op:?}; known operanda: {known:?}"
+                        )));
+                    }
+                }
+            }
+        }
+        self.punish_changeover = Some(punish);
+        Ok(self)
     }
 
     /// The configured changeover delay.
@@ -418,16 +488,20 @@ impl Concurrent {
     }
 
     /// Update changeover bookkeeping for a response at `operandum`.
-    fn register_event(&mut self, operandum: &str, now: f64) {
+    /// Returns the operandum switched from when this response confirms
+    /// a changeover.
+    fn register_event(&mut self, operandum: &str, now: f64) -> Option<String> {
         match self.last_operandum.as_deref() {
             None => {
                 // First response ever: not a changeover.
                 self.last_operandum = Some(operandum.to_string());
                 self.consecutive_new_count = 0;
+                None
             }
             Some(last) if last == operandum => {
                 // Stayed on the same operandum: reset streak.
                 self.consecutive_new_count = 0;
+                None
             }
             Some(_) => {
                 // Differs from previously confirmed operandum.
@@ -438,6 +512,7 @@ impl Concurrent {
                     self.active_cod = self.resolve_cod(&from_op, operandum);
                     self.last_operandum = Some(operandum.to_string());
                     self.consecutive_new_count = 0;
+                    Some(from_op)
                 } else {
                     // Build the streak; only confirm on the frco-th response.
                     self.consecutive_new_count += 1;
@@ -447,6 +522,9 @@ impl Concurrent {
                         self.active_cod = self.resolve_cod(&from_op, operandum);
                         self.last_operandum = Some(operandum.to_string());
                         self.consecutive_new_count = 0;
+                        Some(from_op)
+                    } else {
+                        None
                     }
                 }
             }
@@ -488,6 +566,11 @@ impl Schedule for Concurrent {
                     let _ = p.step(now, None)?;
                 }
             }
+            if let Some(cp) = self.punish_changeover.as_mut() {
+                for p in cp.schedules_mut() {
+                    let _ = p.step(now, None)?;
+                }
+            }
             return Ok(outcome);
         };
 
@@ -504,7 +587,7 @@ impl Schedule for Concurrent {
         // Update changeover bookkeeping. This happens before gating so
         // that the response which completes a changeover is itself
         // covered by the COD window it opens (Catania, 1963).
-        self.register_event(&operandum, now);
+        let changeover_from = self.register_event(&operandum, now);
         let gated = self.cod_active(&operandum, now);
 
         // Step components; only the matched one sees the event. Under
@@ -520,20 +603,56 @@ impl Schedule for Concurrent {
 
         // Advance punishment schedules; only the matched operandum's
         // punisher receives the event, the rest receive a tick.
-        let mut punish_outcome: Option<Outcome> = None;
+        // A changeover punisher receives the response only when it
+        // confirms a changeover in its direction. Every punisher that
+        // fires on this response adds its magnitude.
+        let mut punishers: Vec<Reinforcer> = Vec::new();
         if let Some(punish) = self.punish.as_mut() {
             for (key, p) in punish.iter_mut() {
                 if key == &operandum {
-                    punish_outcome = Some(p.step(now, Some(event))?);
+                    let out = p.step(now, Some(event))?;
+                    if out.reinforced {
+                        punishers.extend(out.reinforcer);
+                    }
                 } else {
                     let _ = p.step(now, None)?;
                 }
             }
         }
+        let mut changeover_punished = false;
+        if let Some(cp) = self.punish_changeover.as_mut() {
+            let mut fire = |p: &mut Box<dyn Schedule>, hit: bool| -> Result<()> {
+                if hit {
+                    let out = p.step(now, Some(event))?;
+                    if out.reinforced {
+                        changeover_punished = true;
+                        punishers.extend(out.reinforcer);
+                    }
+                } else {
+                    let _ = p.step(now, None)?;
+                }
+                Ok(())
+            };
+            match cp {
+                ChangeoverPunish::All(p) => fire(p, changeover_from.is_some())?,
+                ChangeoverPunish::Directional(map) => {
+                    for ((from_op, to_op), p) in map.iter_mut() {
+                        let hit = changeover_from.as_deref() == Some(from_op.as_str())
+                            && to_op == &operandum;
+                        fire(p, hit)?;
+                    }
+                }
+            }
+        }
+        let punish_outcome: Option<Reinforcer> = punishers.first().map(|first| Reinforcer {
+            time: first.time,
+            magnitude: punishers.iter().map(|r| r.magnitude).sum(),
+            label: first.label.clone(),
+        });
 
         let cod_suppressed = held;
         let base_fired = outcome.reinforced && from_event;
-        let punisher_fired = punish_outcome.as_ref().is_some_and(|p| p.reinforced);
+        let punisher_fired = punish_outcome.is_some();
 
         if cod_suppressed && !punisher_fired {
             // The reinforcer stays held and is not delivered on this
@@ -550,12 +669,7 @@ impl Schedule for Concurrent {
 
         if base_fired && punisher_fired {
             let b = outcome.reinforcer.as_ref().unwrap();
-            let p = punish_outcome
-                .as_ref()
-                .unwrap()
-                .reinforcer
-                .as_ref()
-                .unwrap();
+            let p = punish_outcome.as_ref().unwrap();
             let net = b.magnitude - p.magnitude;
             let label = if net > 0.0 {
                 "SR+"
@@ -581,16 +695,15 @@ impl Schedule for Concurrent {
                 .insert("punisher_fired".to_string(), MetaValue::Bool(true));
             out.meta
                 .insert("net_magnitude".to_string(), MetaValue::Float(net));
+            if changeover_punished {
+                out.meta
+                    .insert("changeover_punished".to_string(), MetaValue::Bool(true));
+            }
             return Ok(out);
         }
 
         if punisher_fired {
-            let p = punish_outcome
-                .as_ref()
-                .unwrap()
-                .reinforcer
-                .as_ref()
-                .unwrap();
+            let p = punish_outcome.as_ref().unwrap();
             let mut out = Outcome {
                 reinforced: true,
                 reinforcer: Some(Reinforcer {
@@ -610,6 +723,10 @@ impl Schedule for Concurrent {
                 out.meta
                     .insert("cod_suppressed".to_string(), MetaValue::Bool(true));
             }
+            if changeover_punished {
+                out.meta
+                    .insert("changeover_punished".to_string(), MetaValue::Bool(true));
+            }
             return Ok(out);
         }
 
@@ -622,6 +739,11 @@ impl Schedule for Concurrent {
         }
         if let Some(punish) = self.punish.as_mut() {
             for p in punish.values_mut() {
+                p.reset();
+            }
+        }
+        if let Some(cp) = self.punish_changeover.as_mut() {
+            for p in cp.schedules_mut() {
                 p.reset();
             }
         }

@@ -2,9 +2,9 @@
 
 :jp: [日本語版 README](README.ja.md)
 
-contingency-rs is the Rust version of the OperantKit reinforcement-schedule engine: given a schedule such as FR 5 or a concurrent VI VI, and the responses as they happen, it decides when a reinforcer is delivered. Use it when the program that runs your chamber or task is not written in Python: a Rust or C controller, a browser experiment (WebAssembly, with a [jsPsych](https://www.jspsych.org/) plugin), a Swift or Kotlin app, or a hardware-in-the-loop (HIL) test rig. It is a port of [contingency-py](https://github.com/OperantKit/contingency-py) within [OperantKit](https://github.com/OperantKit); the executable specification is the Python package's 43 conformance fixtures, which this crate replays.
+contingency-rs is the Rust version of the OperantKit reinforcement-schedule engine: given a schedule such as FR 5 or a concurrent VI VI, and the responses as they happen, it decides when a reinforcer is delivered. Use it when the program that runs your chamber or task is not written in Python: a Rust or C controller, a browser experiment (WebAssembly, with a [jsPsych](https://www.jspsych.org/) plugin), a Swift or Kotlin app, or a hardware-in-the-loop (HIL) test rig. It is a port of [contingency-py](https://github.com/OperantKit/contingency-py) within [OperantKit](https://github.com/OperantKit); the executable specification is the Python package's 46 conformance fixtures, which this crate replays.
 
-- **Same outcomes as contingency-py.** `tests/conformance.rs` replays all 43 fixtures, including the 9 seeded ones; the seeded draws match because the crate ports CPython's `random.Random`.
+- **Same outcomes as contingency-py.** `tests/conformance.rs` replays all 46 fixtures, including the 10 seeded ones; the seeded draws match because the crate ports CPython's `random.Random`.
 - **Variable schedules use the Fleshler–Hoffman (1962) progression,** and concurrent schedules apply the changeover delay (COD): the time after a switch between operanda (levers, keys) during which no response is reinforced.
 - **One engine for several hosts:** Rust, C, Python, WebAssembly, and Swift/Kotlin call the same schedule code.
 
@@ -58,7 +58,7 @@ fn main() -> contingency::Result<()> {
 | Area | Contents |
 |---|---|
 | Simple schedules | FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT, limited hold |
-| Compound schedules | Concurrent (with COD, fixed-ratio changeover, direction-specific COD), Multiple, Mixed, Chained, Tandem, Alternative, Conjunctive, Interpolate, Overlay, second-order |
+| Compound schedules | Concurrent (with COD, fixed-ratio changeover, direction-specific COD, punishment per operandum, of every changeover, or per changeover direction), Multiple, Mixed, Chained, Tandem, Alternative, Conjunctive, Interpolate, Overlay, second-order |
 | Differential and progressive | DRO (resetting, momentary), DRL, DRH, percentile, Lag (variability), progressive ratio (arithmetic, geometric, Richardson–Roberts), adjusting, interlocking |
 | Other procedures | Timeout, response cost, Sidman avoidance, discriminated avoidance, escape, matching-to-sample (with correction trials), go/no-go |
 | Value generators | Fleshler–Hoffman (Fleshler & Hoffman, 1962) and the Hantula (1991) variant, in `helpers::fleshler_hoffman` |

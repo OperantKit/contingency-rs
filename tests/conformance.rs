@@ -262,6 +262,16 @@ fn compound_concurrent_punish() {
 }
 
 #[test]
+fn compound_concurrent_punish_changeover() {
+    run_fixture("compound/concurrent_punish_changeover.json");
+}
+
+#[test]
+fn compound_concurrent_punish_directional() {
+    run_fixture("compound/concurrent_punish_directional.json");
+}
+
+#[test]
 fn compound_chained_fr2_fr3() {
     run_fixture("compound/chained_fr2_fr3.json");
 }
