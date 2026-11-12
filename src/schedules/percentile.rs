@@ -24,7 +24,7 @@
 //! Platt, J. R. (1973). Percentile reinforcement: Paradigms for
 //! experimental analysis of response shaping. In G. H. Bower (Ed.),
 //! *The Psychology of Learning and Motivation* (Vol. 7, pp. 271-296).
-//! Academic Press. <https://doi.org/10.1016/S0079-7421(08)60471-7>
+//! Academic Press. <https://doi.org/10.1016/S0079-7421(08)60070-5>
 //!
 //! Hyndman, R. J., & Fan, Y. (1996). Sample quantiles in statistical
 //! packages. *The American Statistician*, 50(4), 361-365.

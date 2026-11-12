@@ -10,9 +10,8 @@ Appleton-Century-Crofts.
 Reynolds, G. S. (1961). Behavioral contrast. *JEAB*, 4(1), 57-71.
 https://doi.org/10.1901/jeab.1961.4-57
 
-Reynolds, G. S. (1964). Accurate and rapid reconditioning of
-spaced-responding by differential reinforcement of other behavior.
-*JEAB*, 7(3), 223-224. https://doi.org/10.1901/jeab.1964.7-223
+Reynolds, G. S. (1964). Accurate and rapid reconditioning of spaced responding.
+*JEAB*, 7(3), 273-275. https://doi.org/10.1901/jeab.1964.7-273
 
 Zeiler, M. D. (1977). Schedules of reinforcement: The controlling
 variables. In W. K. Honig & J. E. R. Staddon (Eds.), *Handbook of
