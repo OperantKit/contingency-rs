@@ -12,6 +12,8 @@
 - Seeded schedules (VR, VI, VT, RR, RI, RT, MatchingToSample, GoNoGo) and the Fleshler-Hoffman generators now draw from `helpers::py_random::PyRandom`, a port of CPython's `random.Random`, instead of `rand::rngs::SmallRng`. A seeded sequence is now bit-equivalent to `contingency-py` with the same seed. **The sequence produced by an existing seed changes**; runs recorded with an earlier build cannot be replayed from the seed alone.
 - `generate_intervals` sums the progression with a correctly rounded `fsum` (as `math.fsum`), and `generate_ratios` / `generate_intervals_hantula1991` round half to even (as Python `round`), so the generators match the Python port value for value.
 - `tests/conformance.rs` replays every fixture of the Python corpus bit-equivalently, including the 8 seeded fixtures that were previously `#[ignore]`d and checked only by reinforcer count.
+- `tests/conformance.rs` also compares `Outcome.meta` when a fixture step records it: every recorded key must be present with an equal value (numbers within 1e-9), the same rule as the Python conformance runner.
+- `GoNoGo`: the outcome of the step whose response closes a trial now reports `meta.phase = "iti"` (the phase after the step), as contingency-py does, instead of the `"go"` / `"nogo"` phase before it.
 
 ### Removed
 

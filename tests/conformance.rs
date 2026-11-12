@@ -10,7 +10,11 @@
 //! Escape — and trial-based) is asserted **bit-equivalent** against
 //! Python observed outcomes: both `Outcome.reinforced` and (when
 //! reinforced) the `Reinforcer` time, magnitude and label must match
-//! within a 1e-9 float tolerance. `Outcome.meta` is not compared.
+//! within a 1e-9 float tolerance. When a step's `expect` carries a
+//! `meta` object, every key in it must be present in `Outcome.meta`
+//! with an equal value (numbers within the same tolerance, other values
+//! by type and value); extra keys in `Outcome.meta` are allowed. This is
+//! the same rule as the Python `contingency-conformance` runner.
 //!
 //! This includes the seeded stochastic fixtures (VR, VI, RI, RR, VT, RT,
 //! and the trial-based MatchingToSample / GoNoGo, whose correct
@@ -42,6 +46,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 
 use contingency::spec::from_spec;
+use contingency::types::MetaValue;
 use contingency::{Outcome, Reinforcer, ResponseEvent};
 
 // -----------------------------------------------------------------------------
@@ -71,6 +76,8 @@ struct ExpectSpec {
     reinforced: bool,
     #[serde(default)]
     reinforcer: Option<Reinforcer>,
+    #[serde(default)]
+    meta: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 // -----------------------------------------------------------------------------
@@ -104,9 +111,53 @@ fn approx_eq(a: f64, b: f64) -> bool {
     (a - b).abs() <= FLOAT_TOL
 }
 
-/// Strict replay: bit-equivalent match on `reinforced` and reinforcer
-/// fields (ignoring `meta`, which the Python generator does not
-/// serialise for this corpus).
+/// Whether an observed meta value equals the fixture's expected value:
+/// numbers within [`FLOAT_TOL`] (a bool never equals a number), other
+/// values by type and value.
+fn meta_value_equal(expected: &serde_json::Value, observed: &MetaValue) -> bool {
+    use serde_json::Value;
+    match (expected, observed) {
+        (Value::Number(n), MetaValue::Int(i)) => {
+            n.as_f64().is_some_and(|e| approx_eq(e, *i as f64))
+        }
+        (Value::Number(n), MetaValue::Float(f)) => n.as_f64().is_some_and(|e| approx_eq(e, *f)),
+        (Value::Bool(e), MetaValue::Bool(b)) => e == b,
+        (Value::String(e), MetaValue::Str(s)) => e == s,
+        (Value::Array(items), MetaValue::StrList(list)) => {
+            items.len() == list.len()
+                && items
+                    .iter()
+                    .zip(list)
+                    .all(|(e, s)| e.as_str() == Some(s.as_str()))
+        }
+        _ => false,
+    }
+}
+
+/// Every key of the fixture's expected `meta` must be present in the
+/// observed meta with an equal value. Extra observed keys are allowed.
+fn assert_meta(
+    relative: &str,
+    i: usize,
+    outcome: &Outcome,
+    expected: &serde_json::Map<String, serde_json::Value>,
+) {
+    for (key, value) in expected {
+        let observed = outcome.meta.get(key).unwrap_or_else(|| {
+            panic!(
+                "{relative} step {i}: meta.{key} missing: expected {value}, got meta {:?}",
+                outcome.meta
+            )
+        });
+        assert!(
+            meta_value_equal(value, observed),
+            "{relative} step {i}: meta.{key} mismatch: expected {value}, got {observed:?}"
+        );
+    }
+}
+
+/// Strict replay: bit-equivalent match on `reinforced`, the reinforcer
+/// fields and, when the fixture records it, `meta`.
 fn run_fixture(relative: &str) {
     let fixture = load_fixture(relative);
     let mut schedule = from_spec(&fixture.schedule)
@@ -149,6 +200,9 @@ fn run_fixture(relative: &str) {
                 "{} step {}: reinforcer shape mismatch: {:?} vs {:?}",
                 relative, i, actual, expected
             ),
+        }
+        if let Some(expected_meta) = &step.expect.meta {
+            assert_meta(relative, i, &outcome, expected_meta);
         }
     }
 }

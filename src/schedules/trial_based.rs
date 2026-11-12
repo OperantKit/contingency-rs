@@ -724,9 +724,12 @@ impl GoNoGo {
     fn handle_response(&mut self, now: f64, event: &ResponseEvent) -> Result<Outcome> {
         let is_go = self.current_is_go;
         let label = if is_go { "correct" } else { "false_alarm" };
-        let phase_snapshot = self.phase();
+        // Close the trial before building the outcome: the reported
+        // phase is the one the schedule is in after this step (`"iti"`),
+        // matching contingency-py.
         self.enter_iti(now, label);
         self.pending_outcome_label = None;
+        let phase_snapshot = self.phase();
 
         let target_slot = if is_go {
             &mut self.correct_go_schedule
