@@ -20,6 +20,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
@@ -126,6 +128,14 @@ impl Schedule for ResponseCost {
         }
 
         self.inner.step(now, event)
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        if let Some(balance) = self.balance {
+            state.insert("balance".to_string(), MetaValue::Float(balance));
+        }
+        state
     }
 
     fn reset(&mut self) {

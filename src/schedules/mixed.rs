@@ -21,6 +21,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
@@ -112,6 +114,15 @@ impl Schedule for Mixed {
             reinforcer: None,
             meta,
         })
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "active_index".to_string(),
+            MetaValue::Int(self.active as i64),
+        );
+        state
     }
 
     fn reset(&mut self) {

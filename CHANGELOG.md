@@ -8,6 +8,7 @@
 - `spec::from_spec`: `Concurrent` takes the optional `cod_directional` (an array of `{"from", "to", "cod"}`; a repeated pair is a `Config` error) and `punish` (an object of operandum to schedule spec), built with `Concurrent::with_extensions`.
 - Python: `contingency_core.from_spec` and `Schedule.from_spec` build any schedule from a spec given as a dict or a JSON string; `contingency_core.SPEC_TYPES` lists the spec types. `Outcome`, `Reinforcer`, and `ResponseEvent` can be constructed with the same arguments and defaults as in contingency-py (`Outcome` validates `reinforced` against `reinforcer` the same way) and compare by value. `pyproject.toml` lets `maturin develop` build the module as the `contingency-core` distribution.
 - Python: `Schedule.probe_response(now, event)` reports whether a response would reinforce without changing the schedule (`Schedule::probe_response`); it returns `None` for schedules without a probe (all but FR, VR, RR, FI, VI and RI).
+- `Schedule::state()` reports the observable state after the last step, read-only (empty by default): `active_index` for `Multiple`, `Chained`, `Tandem` and `Mixed`, `unit_completions` for `SecondOrder`, `in_timeout` for `Timeout`, and `balance` for `ResponseCost` (left out while the balance is unlimited). Python: `Schedule.state()` returns it as a dict.
 
 ### Changed
 

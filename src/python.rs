@@ -164,6 +164,24 @@ impl PyReinforcer {
     }
 }
 
+/// Convert a meta map into a Python ``dict``.
+fn meta_to_py<'py>(
+    py: Python<'py>,
+    meta: &BTreeMap<String, MetaValue>,
+) -> PyResult<Bound<'py, PyDict>> {
+    let dict = PyDict::new_bound(py);
+    for (key, value) in meta.iter() {
+        match value {
+            MetaValue::Bool(b) => dict.set_item(key, b)?,
+            MetaValue::Int(i) => dict.set_item(key, i)?,
+            MetaValue::Float(f) => dict.set_item(key, f)?,
+            MetaValue::Str(s) => dict.set_item(key, s)?,
+            MetaValue::StrList(v) => dict.set_item(key, v)?,
+        }
+    }
+    Ok(dict)
+}
+
 // ---------------------------------------------------------------------------
 // Outcome
 // ---------------------------------------------------------------------------
@@ -267,17 +285,7 @@ impl PyOutcome {
 
     #[getter]
     fn meta<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let dict = PyDict::new_bound(py);
-        for (key, value) in self.inner.meta.iter() {
-            match value {
-                MetaValue::Bool(b) => dict.set_item(key, b)?,
-                MetaValue::Int(i) => dict.set_item(key, i)?,
-                MetaValue::Float(f) => dict.set_item(key, f)?,
-                MetaValue::Str(s) => dict.set_item(key, s)?,
-                MetaValue::StrList(v) => dict.set_item(key, v)?,
-            }
-        }
-        Ok(dict)
+        meta_to_py(py, &self.inner.meta)
     }
 
     fn __repr__(&self) -> String {
@@ -341,6 +349,12 @@ impl PySchedule {
             None => Ok(None),
             Some(result) => result.map(Some).map_err(map_err),
         }
+    }
+
+    /// The observable state of the schedule after the last step, as a
+    /// ``dict`` (empty for schedules without one; see ``Schedule::state``).
+    fn state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+        meta_to_py(py, &self.inner.state())
     }
 
     /// Build any schedule from a spec (``{"type": ..., "params": ...}``).

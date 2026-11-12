@@ -27,6 +27,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
 use crate::types::{MetaValue, Outcome, ResponseEvent};
@@ -104,6 +106,15 @@ impl Schedule for SecondOrder {
             return Ok(out);
         }
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "unit_completions".to_string(),
+            MetaValue::Int(self.unit_completions as i64),
+        );
+        state
     }
 
     fn reset(&mut self) {

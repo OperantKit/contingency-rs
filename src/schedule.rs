@@ -10,6 +10,9 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
+use crate::types::MetaValue;
 use crate::{Outcome, ResponseEvent, Result};
 
 /// A reinforcement schedule.
@@ -50,6 +53,18 @@ pub trait Schedule: Send {
     /// uses it to hold reinforcers during a changeover delay.
     fn probe_response(&self, _now: f64, _event: &ResponseEvent) -> Option<Result<bool>> {
         None
+    }
+
+    /// The observable state of the schedule after the last step.
+    ///
+    /// Read-only: calling it changes nothing. The default is empty.
+    /// Compound schedules with a position report it here, under the
+    /// same names as the Python classes' attributes: `active_index`
+    /// (Multiple, Chained, Tandem, Mixed), `unit_completions`
+    /// (SecondOrder), `in_timeout` (Timeout) and `balance`
+    /// (ResponseCost; left out while the balance is unlimited).
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        BTreeMap::new()
     }
 }
 
@@ -100,6 +115,10 @@ impl<T: Schedule + ?Sized> Schedule for Box<T> {
 
     fn probe_response(&self, now: f64, event: &ResponseEvent) -> Option<Result<bool>> {
         (**self).probe_response(now, event)
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        (**self).state()
     }
 }
 

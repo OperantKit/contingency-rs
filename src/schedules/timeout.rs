@@ -17,6 +17,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -129,6 +131,15 @@ impl Schedule for Timeout {
             });
         }
         Ok(outcome)
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "in_timeout".to_string(),
+            MetaValue::Bool(self.timeout_ends.is_some()),
+        );
+        state
     }
 
     fn reset(&mut self) {

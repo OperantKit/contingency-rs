@@ -57,7 +57,7 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 use core::fmt;
 
 use crate::errors::ContingencyError;
@@ -300,6 +300,15 @@ impl Schedule for Multiple {
         })
     }
 
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "active_index".to_string(),
+            MetaValue::Int(self.active_index as i64),
+        );
+        state
+    }
+
     fn reset(&mut self) {
         self.active_index = 0;
         self.last_now = None;
@@ -471,6 +480,15 @@ impl Schedule for Chained {
         })
     }
 
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "active_index".to_string(),
+            MetaValue::Int(self.active_index as i64),
+        );
+        state
+    }
+
     fn reset(&mut self) {
         self.active_index = 0;
         self.last_now = None;
@@ -626,6 +644,15 @@ impl Schedule for Tandem {
             reinforcer: None,
             meta,
         })
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "active_index".to_string(),
+            MetaValue::Int(self.active_index as i64),
+        );
+        state
     }
 
     fn reset(&mut self) {
