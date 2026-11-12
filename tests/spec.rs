@@ -158,6 +158,21 @@ fn every_spec_type_builds_and_steps() {
         json!({"target": "irt", "rank": 50, "window": 3}),
         &r10,
     );
+    let lr = |ops: &[&'static str]| -> Vec<(f64, Option<&'static str>)> {
+        ops.iter()
+            .enumerate()
+            .map(|(i, o)| ((i + 1) as f64 * 0.5, Some(*o)))
+            .collect()
+    };
+    assert_eq!(
+        reinforced_at(&smoke(
+            &mut c,
+            "Lag",
+            json!({"n": 1}),
+            &lr(&["left", "right", "right", "left"])
+        )),
+        vec![0, 1, 3]
+    );
 
     // Compound.
     let conc_steps = [
@@ -278,14 +293,14 @@ fn every_spec_type_builds_and_steps() {
     smoke(&mut c, "GoNoGo", json!({"seed": 1}), &ticks);
 
     let all: HashSet<&str> = SPEC_TYPES.iter().copied().collect();
-    assert_eq!(SPEC_TYPES.len(), 36);
-    assert_eq!(all.len(), 36, "SPEC_TYPES has duplicates");
+    assert_eq!(SPEC_TYPES.len(), 37);
+    assert_eq!(all.len(), 37, "SPEC_TYPES has duplicates");
     let missing: Vec<_> = SPEC_TYPES.iter().filter(|t| !c.contains(*t)).collect();
     assert!(
         missing.is_empty(),
         "spec types without a build test: {missing:?}"
     );
-    assert_eq!(c.len(), 36);
+    assert_eq!(c.len(), 37);
 }
 
 #[test]
@@ -481,6 +496,12 @@ fn malformed_specs_are_config_errors() {
         conc(json!({"punish": {"a": {"type": "Nope"}}})),
         json!({"type": "Multiple", "params": {"components": [{"type": "CRF"}], "stimuli": [1]}}),
         json!({"type": "MatchingToSample", "params": {"n_comparisons": 2, "consequence": {"type": "Nope"}}}),
+        json!({"type": "Lag", "params": {}}),
+        json!({"type": "Lag", "params": {"n": 1.0}}),
+        json!({"type": "Lag", "params": {"n": -1}}),
+        json!({"type": "Lag", "params": {"n": 1, "length": 0}}),
+        json!({"type": "Lag", "params": {"n": (1u64 << 32)}}),
+        json!({"type": "Lag", "params": {"n": (1u64 << 62)}}),
     ];
     for spec in cases {
         config_error(spec);

@@ -9,8 +9,8 @@
 //!
 //! [`from_spec`] is the single mapping from that object to a boxed
 //! [`Schedule`]. It mirrors `build_schedule_from_spec` in contingency-py
-//! (`contingency.conformance.spec`) and accepts the same 36 `type` tags:
-//! the 35 schedule classes plus `CRF` (an alias for `FR 1`).
+//! (`contingency.conformance.spec`) and accepts the same 37 `type` tags:
+//! the 36 schedule classes plus `CRF` (an alias for `FR 1`).
 //!
 //! # Rules
 //!
@@ -20,7 +20,8 @@
 //!   optional nested schedule may be absent or `null`; both mean "none".
 //! * Integer parameters (`n`, `n_intervals`, `seed`, `response_count`,
 //!   `frco`, `rank`, `window`, `initial_ratio`, `n_comparisons`, and the
-//!   `start` / `step_size` of a progressive ratio) must be JSON integers;
+//!   `start` / `step_size` of a progressive ratio, `length` of a Lag)
+//!   must be JSON integers;
 //!   `5.0` is rejected.
 //! * Times are unitless reals in the engine's clock unit.
 //! * `Percentile.target` accepts only `"irt"`; `AdjustingSchedule.target`
@@ -59,16 +60,17 @@ use serde_json::{Map, Value};
 use crate::schedules::{
     arithmetic, crf, geometric, richardson_roberts, AdjustingSchedule, AdjustingTarget,
     Alternative, Chained, Concurrent, Conjunctive, DiscriminatedAvoidance, DroMode, Escape, GoNoGo,
-    InterlockingSchedule, Interpolate, LimitedHold, MatchingToSample, Mixed, Multiple, Overlay,
-    Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost, SecondOrder,
-    Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT, VI, VR, VT,
+    InterlockingSchedule, Interpolate, Lag, LimitedHold, MatchingToSample, Mixed, Multiple,
+    Overlay, Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost,
+    SecondOrder, Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT,
+    VI, VR, VT,
 };
 use crate::{ContingencyError, Result, Schedule};
 
 /// Every `type` tag that [`from_spec`] accepts, in the order of the
 /// spec tables (atomic, wrappers, differential, compound, progressive
 /// and adjusting, aversive, trial-based).
-pub const SPEC_TYPES: [&str; 36] = [
+pub const SPEC_TYPES: [&str; 37] = [
     "FR",
     "CRF",
     "EXT",
@@ -87,6 +89,7 @@ pub const SPEC_TYPES: [&str; 36] = [
     "DRL",
     "DRH",
     "Percentile",
+    "Lag",
     "Concurrent",
     "Alternative",
     "Conjunctive",
@@ -205,6 +208,11 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
                 direction,
             )?)
         }
+
+        "Lag" => Box::new(Lag::new(
+            p.req_usize("n")?,
+            p.opt_usize("length")?.unwrap_or(1),
+        )?),
 
         // --- compound ---------------------------------------------------
         "Concurrent" => {

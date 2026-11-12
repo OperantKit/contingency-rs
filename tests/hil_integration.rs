@@ -208,6 +208,7 @@ fn sample_specs() -> Vec<Value> {
             "Percentile",
             json!({"target": "irt", "rank": 50, "window": 3}),
         ),
+        ("Lag", json!({"n": 1, "length": 2})),
         (
             "Concurrent",
             json!({"components": {"left": fr(1), "right": fr(1)}, "cod": 0.0}),

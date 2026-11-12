@@ -101,8 +101,8 @@ def test_from_spec_rejects_bad_spec_with_value_error(spec: Any) -> None:
 
 
 def test_spec_types_lists_every_type() -> None:
-    assert len(cc.SPEC_TYPES) == 36
-    assert len(set(cc.SPEC_TYPES)) == 36
+    assert len(cc.SPEC_TYPES) == 37
+    assert len(set(cc.SPEC_TYPES)) == 37
     assert "Concurrent" in cc.SPEC_TYPES
 
 

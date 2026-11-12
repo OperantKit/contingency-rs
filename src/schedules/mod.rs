@@ -47,6 +47,9 @@ pub use second_order::*;
 pub mod percentile;
 pub use percentile::*;
 
+pub mod lag;
+pub use lag::*;
+
 pub mod conjunctive;
 pub use conjunctive::*;
 

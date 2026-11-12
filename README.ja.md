@@ -2,9 +2,9 @@
 
 :gb: [English README](README.md)
 
-contingency-rs は、OperantKit の強化スケジュールエンジンの Rust 版です。FR 5 や並立 VI VI のようなスケジュールと、起きた反応を順に渡すと、強化子をいつ提示するかを決めます。実験箱や課題を動かすプログラムが Python でないときに使います。たとえば Rust や C の制御プログラム、ブラウザの実験（WebAssembly。[jsPsych](https://www.jspsych.org/) 用プラグインつき）、Swift や Kotlin のアプリ、ハードウェア・イン・ザ・ループ（HIL）の試験装置です。[OperantKit](https://github.com/OperantKit) の中では [contingency-py](https://github.com/OperantKit/contingency-py) の移植にあたり、実行可能な仕様は Python パッケージの 39 個の適合性 fixture です。本クレートはそれらを再生して検証します。
+contingency-rs は、OperantKit の強化スケジュールエンジンの Rust 版です。FR 5 や並立 VI VI のようなスケジュールと、起きた反応を順に渡すと、強化子をいつ提示するかを決めます。実験箱や課題を動かすプログラムが Python でないときに使います。たとえば Rust や C の制御プログラム、ブラウザの実験（WebAssembly。[jsPsych](https://www.jspsych.org/) 用プラグインつき）、Swift や Kotlin のアプリ、ハードウェア・イン・ザ・ループ（HIL）の試験装置です。[OperantKit](https://github.com/OperantKit) の中では [contingency-py](https://github.com/OperantKit/contingency-py) の移植にあたり、実行可能な仕様は Python パッケージの 43 個の適合性 fixture です。本クレートはそれらを再生して検証します。
 
-- **contingency-py と同じ結果になります。** `tests/conformance.rs` は、乱数の種を持つ 8 本を含む 39 本すべての fixture を再生します。CPython の `random.Random` を移植しているので、種付きの抽選も一致します。
+- **contingency-py と同じ結果になります。** `tests/conformance.rs` は、乱数の種を持つ 9 本を含む 43 本すべての fixture を再生します。CPython の `random.Random` を移植しているので、種付きの抽選も一致します。
 - **変動スケジュールの値は Fleshler–Hoffman (1962) の数列で作ります。** 並立スケジュールでは切替遅延（COD）を扱います。COD は、オペランダム（レバーやキー）を切り替えた直後に反応を強化しない時間のことです。
 - **1 つのエンジンを複数の環境から呼べます。** Rust・C・Python・WebAssembly・Swift/Kotlin が同じスケジュールのコードを使います。
 
@@ -59,7 +59,7 @@ fn main() -> contingency::Result<()> {
 |---|---|
 | 単一スケジュール | FR、VR、RR、CRF、FI、VI、RI、FT、VT、RT、EXT、リミテッドホールド |
 | 複合スケジュール | 並立（COD、固定比率の切替要件、方向別の COD つき）、多元、混合、連鎖、連接、選択、連言、挿入、重畳、二次スケジュール |
-| 分化強化と累進 | DRO（リセット型・瞬時型）、DRL、DRH、パーセンタイル、累進比率（等差・等比・Richardson–Roberts）、調整、連動 |
+| 分化強化と累進 | DRO（リセット型・瞬時型）、DRL、DRH、パーセンタイル、Lag（変動性の分化強化）、累進比率（等差・等比・Richardson–Roberts）、調整、連動 |
 | その他の手続き | タイムアウト、反応コスト、Sidman 型回避、弁別回避、逃避、見本合わせ、Go/No-Go |
 | 値の生成 | Fleshler–Hoffman（Fleshler & Hoffman, 1962）と Hantula (1991) の変法。`helpers::fleshler_hoffman` にあります |
 | ハードウェア抽象化層（`hw`） | 装置のインタフェースと、仮想の装置、シリアルポート接続（`serial` 機能） |
