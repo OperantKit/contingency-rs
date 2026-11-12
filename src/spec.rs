@@ -28,6 +28,10 @@
 //!   defaults to `"above"`.
 //! * `LimitedHold.inner` must be `FI`, `VI`, or `RI` (the armable
 //!   schedules).
+//! * `Concurrent` optionally takes `cod_directional`, an array of
+//!   `{"from", "to", "cod"}` objects (a repeated pair is rejected), and
+//!   `punish`, an object of operandum to schedule spec; both are passed
+//!   to [`Concurrent::with_extensions`].
 //!
 //! Every malformed spec — unknown type, missing or mistyped parameter —
 //! returns [`ContingencyError::Config`]; parameter values that the
@@ -208,10 +212,22 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
             for (key, cspec) in p.req_object("components")? {
                 components.insert(key.clone(), nested(ty, "components", cspec)?);
             }
-            Box::new(Concurrent::new(
+            let punish = match p.opt_object("punish")? {
+                None => None,
+                Some(map) => {
+                    let mut out: IndexMap<String, Box<dyn Schedule>> = IndexMap::default();
+                    for (key, pspec) in map {
+                        out.insert(key.clone(), nested(ty, "punish", pspec)?);
+                    }
+                    Some(out)
+                }
+            };
+            Box::new(Concurrent::with_extensions(
                 components,
                 p.opt_f64("cod")?.unwrap_or(0.0),
                 p.opt_u32("frco")?.unwrap_or(0),
+                p.opt_cod_directional("cod_directional")?,
+                punish,
             )?)
         }
         "Alternative" => Box::new(Alternative::new(
@@ -553,6 +569,52 @@ impl<'a> Params<'a> {
             })
             .collect::<Result<Vec<_>>>()
             .map(Some)
+    }
+
+    /// An array of `{from, to, cod}` objects, as
+    /// `Concurrent.cod_directional` takes. A repeated `(from, to)` pair
+    /// is rejected.
+    fn opt_cod_directional(&self, key: &str) -> Result<Option<IndexMap<(String, String), f64>>> {
+        const EXPECTED: &str = "an array of {from, to, cod} objects";
+        let Some(v) = self.get(key) else {
+            return Ok(None);
+        };
+        let arr = v.as_array().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let mut out: IndexMap<(String, String), f64> = IndexMap::default();
+        for entry in arr {
+            let obj = entry
+                .as_object()
+                .filter(|o| o.len() == 3)
+                .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+            let text = |field: &str| {
+                obj.get(field)
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+                    .ok_or_else(|| self.wrong_type(key, EXPECTED, v))
+            };
+            let pair = (text("from")?, text("to")?);
+            let cod = obj
+                .get("cod")
+                .and_then(Value::as_f64)
+                .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+            if out.contains_key(&pair) {
+                return Err(config(format!(
+                    "{}: param {key:?} repeats the pair ({:?}, {:?})",
+                    self.ty, pair.0, pair.1
+                )));
+            }
+            out.insert(pair, cod);
+        }
+        Ok(Some(out))
+    }
+
+    fn opt_object(&self, key: &str) -> Result<Option<&'a Map<String, Value>>> {
+        self.get(key)
+            .map(|v| {
+                v.as_object()
+                    .ok_or_else(|| self.wrong_type(key, "an object of schedule specs", v))
+            })
+            .transpose()
     }
 
     fn req_object(&self, key: &str) -> Result<&'a Map<String, Value>> {

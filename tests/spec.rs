@@ -416,6 +416,35 @@ fn config_error(spec: Value) -> String {
     }
 }
 
+/// A two-operandum (`a`, `b`) CRF Concurrent spec with `extra` params.
+fn conc(extra: Value) -> Value {
+    let mut params = json!({"components": {"a": {"type": "CRF"}, "b": {"type": "CRF"}}});
+    for (k, v) in extra.as_object().expect("extra params object") {
+        params[k] = v.clone();
+    }
+    json!({"type": "Concurrent", "params": params})
+}
+
+#[test]
+fn concurrent_cod_directional_and_punish_are_passed_through() {
+    // Directional a -> b COD of 2 overrides the base COD of 0.5: the
+    // response on b 1 time unit after the switch is still gated.
+    let mut s = build(conc(json!({
+        "cod": 0.5,
+        "cod_directional": [{"from": "a", "to": "b", "cod": 2.0}]})));
+    let out = run(s.as_mut(), &[(0.0, Some("a")), (1.0, Some("b")), (2.0, Some("b")), (3.5, Some("b"))]);
+    assert_eq!(reinforced_at(&out), vec![0, 3]);
+
+    // An FR 1 punisher on a turns every a response into a net-zero
+    // delivery; b is untouched.
+    let mut s = build(conc(json!({"punish": {"a": {"type": "FR", "params": {"n": 1}}}})));
+    let out = run(s.as_mut(), &[(1.0, Some("a")), (2.0, Some("b"))]);
+    let a = out[0].reinforcer.as_ref().expect("a delivers");
+    assert!(a.magnitude.abs() < 1e-9, "net magnitude {}", a.magnitude);
+    let b = out[1].reinforcer.as_ref().expect("b delivers");
+    assert_eq!(b.label, "SR+");
+}
+
 #[test]
 fn malformed_specs_are_config_errors() {
     let cases = [
@@ -439,6 +468,17 @@ fn malformed_specs_are_config_errors() {
         json!({"type": "Timeout", "params": {"duration": 1.0}}),
         json!({"type": "Concurrent", "params": {"components": [{"type": "CRF"}]}}),
         json!({"type": "Concurrent", "params": {"components": {"a": {"type": "CRF"}}}}),
+        conc(json!({"cod_directional": {"a": 1.0}})),
+        conc(json!({"cod_directional": [{"from": "a", "to": "b"}]})),
+        conc(json!({"cod_directional": [{"from": "a", "to": "b", "cod": "1"}]})),
+        conc(json!({"cod_directional": [{"from": "a", "to": "b", "cod": 1.0, "x": 1}]})),
+        conc(json!({"cod_directional": [
+            {"from": "a", "to": "b", "cod": 1.0}, {"from": "a", "to": "b", "cod": 2.0}]})),
+        conc(json!({"cod_directional": [{"from": "a", "to": "a", "cod": 1.0}]})),
+        conc(json!({"cod_directional": [{"from": "a", "to": "b", "cod": -1.0}]})),
+        conc(json!({"punish": [{"type": "CRF"}]})),
+        conc(json!({"punish": {"z": {"type": "CRF"}}})),
+        conc(json!({"punish": {"a": {"type": "Nope"}}})),
         json!({"type": "Multiple", "params": {"components": [{"type": "CRF"}], "stimuli": [1]}}),
         json!({"type": "MatchingToSample", "params": {"n_comparisons": 2, "consequence": {"type": "Nope"}}}),
     ];

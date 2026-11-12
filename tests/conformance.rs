@@ -252,6 +252,16 @@ fn compound_concurrent_cod_tick() {
 }
 
 #[test]
+fn compound_concurrent_cod_directional() {
+    run_fixture("compound/concurrent_cod_directional.json");
+}
+
+#[test]
+fn compound_concurrent_punish() {
+    run_fixture("compound/concurrent_punish.json");
+}
+
+#[test]
 fn compound_chained_fr2_fr3() {
     run_fixture("compound/chained_fr2_fr3.json");
 }
