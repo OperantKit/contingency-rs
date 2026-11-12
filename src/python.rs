@@ -331,6 +331,18 @@ impl PySchedule {
         self.inner.reset();
     }
 
+    /// Report whether a response ``event`` at ``now`` would reinforce,
+    /// without changing this schedule's state.
+    ///
+    /// Returns ``None`` for schedules that offer no such probe (only FR,
+    /// VR, RR, FI, VI and RI do; see ``Schedule::probe_response``).
+    fn probe_response(&self, now: f64, event: &PyResponseEvent) -> PyResult<Option<bool>> {
+        match self.inner.probe_response(now, &event.inner) {
+            None => Ok(None),
+            Some(result) => result.map(Some).map_err(map_err),
+        }
+    }
+
     /// Build any schedule from a spec (``{"type": ..., "params": ...}``).
     ///
     /// Same as the module-level :func:`from_spec`.
