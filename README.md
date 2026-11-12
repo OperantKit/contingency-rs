@@ -60,7 +60,7 @@ fn main() -> contingency::Result<()> {
 | Simple schedules | FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT, limited hold |
 | Compound schedules | Concurrent (with COD, fixed-ratio changeover, direction-specific COD), Multiple, Mixed, Chained, Tandem, Alternative, Conjunctive, Interpolate, Overlay, second-order |
 | Differential and progressive | DRO (resetting, momentary), DRL, DRH, percentile, Lag (variability), progressive ratio (arithmetic, geometric, Richardson–Roberts), adjusting, interlocking |
-| Other procedures | Timeout, response cost, Sidman avoidance, discriminated avoidance, escape, matching-to-sample, go/no-go |
+| Other procedures | Timeout, response cost, Sidman avoidance, discriminated avoidance, escape, matching-to-sample (with correction trials), go/no-go |
 | Value generators | Fleshler–Hoffman (Fleshler & Hoffman, 1962) and the Hantula (1991) variant, in `helpers::fleshler_hoffman` |
 | Hardware abstraction layer (`hw`) | An apparatus interface with a virtual backend and a serial-port backend (`serial` feature) |
 | HIL bridge | The `contingency-hil` binary: a TCP server that takes responses as newline-delimited JSON, runs a schedule, and sends reinforcers back. The schedule is given as a JSON spec and built by `spec::from_spec`, so every schedule in this table can run on it (`contingency-hil --help`) |

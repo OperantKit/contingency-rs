@@ -429,6 +429,11 @@ fn trial_mts_n2_seed7() {
 }
 
 #[test]
+fn trial_mts_n2_seed7_correction1() {
+    run_fixture("trial/mts_n2_seed7_correction1.json");
+}
+
+#[test]
 fn trial_mts_trialtypes_seed3() {
     run_fixture("trial/mts_trialtypes_seed3.json");
 }

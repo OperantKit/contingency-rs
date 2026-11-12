@@ -59,11 +59,11 @@ use serde_json::{Map, Value};
 
 use crate::schedules::{
     arithmetic, crf, geometric, richardson_roberts, AdjustingSchedule, AdjustingTarget,
-    Alternative, Chained, Concurrent, Conjunctive, DiscriminatedAvoidance, DroMode, Escape, GoNoGo,
-    InterlockingSchedule, Interpolate, Lag, LimitedHold, MatchingToSample, Mixed, Multiple,
-    Overlay, Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio, ResponseCost,
-    SecondOrder, Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT, RI, RR, RT,
-    VI, VR, VT,
+    Alternative, Chained, Concurrent, Conjunctive, Correction, DiscriminatedAvoidance, DroMode,
+    Escape, GoNoGo, InterlockingSchedule, Interpolate, Lag, LimitedHold, MatchingToSample, Mixed,
+    Multiple, Overlay, Percentile, PercentileDirection, PercentileTarget, ProgressiveRatio,
+    ResponseCost, SecondOrder, Sidman, Tandem, Timeout, TrialType, DRH, DRL, DRO, EXT, FI, FR, FT,
+    RI, RR, RT, VI, VR, VT,
 };
 use crate::{ContingencyError, Result, Schedule};
 
@@ -337,7 +337,8 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
         .with_trial_types(
             p.opt_trial_types("trial_types")?,
             p.opt_trial_types("probe_trial_types")?,
-        )?),
+        )?
+        .with_correction(p.opt_correction("correction")?)?),
         "GoNoGo" => Box::new(GoNoGo::new(
             p.opt_f64("go_probability")?.unwrap_or(0.5),
             p.opt_f64("response_window")?.unwrap_or(5.0),
@@ -577,6 +578,45 @@ impl<'a> Params<'a> {
             })
             .collect::<Result<Vec<_>>>()
             .map(Some)
+    }
+
+    /// `MatchingToSample.correction`: `{"mode": "disabled"}`,
+    /// `{"mode": "unlimited"}` or `{"mode": "bounded", "limit": N}` with
+    /// `N >= 1`. Absent reads as disabled.
+    fn opt_correction(&self, key: &str) -> Result<Correction> {
+        const EXPECTED: &str = "{\"mode\": \"disabled\" | \"unlimited\"} or {\"mode\": \"bounded\", \"limit\": N >= 1}";
+        let Some(v) = self.get(key) else {
+            return Ok(Correction::Disabled);
+        };
+        let obj = v
+            .as_object()
+            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let mode = obj
+            .get("mode")
+            .and_then(Value::as_str)
+            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let allowed: &[&str] = if mode == "bounded" {
+            &["mode", "limit"]
+        } else {
+            &["mode"]
+        };
+        if obj.keys().any(|k| !allowed.contains(&k.as_str())) {
+            return Err(self.wrong_type(key, EXPECTED, v));
+        }
+        match mode {
+            "disabled" => Ok(Correction::Disabled),
+            "unlimited" => Ok(Correction::Unlimited),
+            "bounded" => {
+                let limit = obj
+                    .get("limit")
+                    .and_then(Value::as_u64)
+                    .filter(|n| *n >= 1)
+                    .and_then(|n| u32::try_from(n).ok())
+                    .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+                Ok(Correction::Bounded(limit))
+            }
+            other => Err(self.bad_value(key, other)),
+        }
     }
 
     /// An array of `{from, to, cod}` objects, as

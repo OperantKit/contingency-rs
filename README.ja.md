@@ -60,7 +60,7 @@ fn main() -> contingency::Result<()> {
 | 単一スケジュール | FR、VR、RR、CRF、FI、VI、RI、FT、VT、RT、EXT、リミテッドホールド |
 | 複合スケジュール | 並立（COD、固定比率の切替要件、方向別の COD つき）、多元、混合、連鎖、連接、選択、連言、挿入、重畳、二次スケジュール |
 | 分化強化と累進 | DRO（リセット型・瞬時型）、DRL、DRH、パーセンタイル、Lag（変動性の分化強化）、累進比率（等差・等比・Richardson–Roberts）、調整、連動 |
-| その他の手続き | タイムアウト、反応コスト、Sidman 型回避、弁別回避、逃避、見本合わせ、Go/No-Go |
+| その他の手続き | タイムアウト、反応コスト、Sidman 型回避、弁別回避、逃避、見本合わせ（修正試行つき）、Go/No-Go |
 | 値の生成 | Fleshler–Hoffman（Fleshler & Hoffman, 1962）と Hantula (1991) の変法。`helpers::fleshler_hoffman` にあります |
 | ハードウェア抽象化層（`hw`） | 装置のインタフェースと、仮想の装置、シリアルポート接続（`serial` 機能） |
 | HIL ブリッジ | `contingency-hil` バイナリ。改行区切りの JSON で反応を受け取り、スケジュールを動かして強化子を送り返す TCP サーバです。スケジュールは JSON の spec で渡し、`spec::from_spec` で組み立てるので、この表のスケジュールはどれも動かせます（`contingency-hil --help`） |

@@ -72,6 +72,20 @@ enum MtsPhase {
     Iti,
 }
 
+/// Correction procedure of [`MatchingToSample`]: whether a baseline
+/// trial that ends incorrect is presented again.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Correction {
+    /// No correction trials.
+    #[default]
+    Disabled,
+    /// Repeat the trial until it is answered correctly.
+    Unlimited,
+    /// Repeat the trial at most `limit` times (`limit >= 1`), then draw
+    /// the next trial.
+    Bounded(u32),
+}
+
 /// One MTS trial type: a sample, its correct comparison, and the full
 /// comparison set (exactly `n_comparisons` distinct stimuli).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +155,12 @@ type Meta = alloc::collections::BTreeMap<String, MetaValue>;
 /// comparison positions are shuffled at the start of each trial. Probe
 /// trials are scored but never consequated.
 ///
+/// With [`MatchingToSample::with_correction`], a baseline trial that ends
+/// incorrect (a wrong choice or a timeout) is followed, after the ITI, by
+/// the same trial: the same correct operandum, sample and comparison
+/// positions, with no draw from the random stream. Probe trials are not
+/// repeated. Outcome meta then also reports `correction_trial`.
+///
 /// # References
 ///
 /// Cumming, W. W., & Berryman, R. (1965). The complex discriminated
@@ -168,6 +188,10 @@ pub struct MatchingToSample {
     block_pos: usize,
     current_type_index: Option<usize>,
     current_positions: Vec<String>,
+    correction: Correction,
+    repeats_done: u32,
+    repeat_next: bool,
+    on_correction_trial: bool,
 }
 
 impl core::fmt::Debug for MatchingToSample {
@@ -183,6 +207,8 @@ impl core::fmt::Debug for MatchingToSample {
             .field("trial_types", &self.trial_types)
             .field("n_baseline_types", &self.n_baseline_types)
             .field("current_type_index", &self.current_type_index)
+            .field("correction", &self.correction)
+            .field("on_correction_trial", &self.on_correction_trial)
             .finish()
     }
 }
@@ -234,7 +260,32 @@ impl MatchingToSample {
             block_pos: 0,
             current_type_index: None,
             current_positions: Vec::new(),
+            correction: Correction::Disabled,
+            repeats_done: 0,
+            repeat_next: false,
+            on_correction_trial: false,
         })
+    }
+
+    /// Set the correction procedure. `Bounded(0)` is rejected.
+    pub fn with_correction(mut self, correction: Correction) -> Result<Self> {
+        if correction == Correction::Bounded(0) {
+            return Err(ContingencyError::Config(
+                "correction limit must be >= 1, got 0".into(),
+            ));
+        }
+        self.correction = correction;
+        Ok(self)
+    }
+
+    /// The correction procedure.
+    pub fn correction(&self) -> Correction {
+        self.correction
+    }
+
+    /// Whether the current trial repeats an incorrect trial.
+    pub fn is_correction_trial(&self) -> bool {
+        self.on_correction_trial
     }
 
     /// Attach baseline and probe trial types.
@@ -379,7 +430,30 @@ impl MatchingToSample {
             meta.insert("correct".into(), MetaValue::Str(tt.correct.clone()));
             meta.insert("probe".into(), MetaValue::Bool(self.is_probe_trial()));
         }
+        if self.correction != Correction::Disabled {
+            meta.insert(
+                "correction_trial".into(),
+                MetaValue::Bool(self.on_correction_trial),
+            );
+        }
         meta
+    }
+
+    /// Decide, when a trial ends, whether the next trial repeats it.
+    fn settle_correction(&mut self, label: &str) {
+        let wants_repeat = label == "incorrect" && !self.is_probe_trial();
+        let allowed = match self.correction {
+            Correction::Disabled => false,
+            Correction::Unlimited => true,
+            Correction::Bounded(limit) => self.repeats_done < limit,
+        };
+        if wants_repeat && allowed {
+            self.repeat_next = true;
+            self.repeats_done = self.repeats_done.saturating_add(1);
+        } else {
+            self.repeat_next = false;
+            self.repeats_done = 0;
+        }
     }
 
     fn begin_trial(&mut self, now: f64) {
@@ -389,7 +463,13 @@ impl MatchingToSample {
             MtsPhase::Choice
         };
         self.phase_started = Some(now);
-        self.correct_operandum = self.pick_correct();
+        self.on_correction_trial = self.repeat_next;
+        self.repeat_next = false;
+        if !self.on_correction_trial {
+            // A correction trial keeps the correct operandum, trial type
+            // and comparison positions of the trial it repeats.
+            self.correct_operandum = self.pick_correct();
+        }
     }
 
     fn enter_choice(&mut self, now: f64) {
@@ -401,6 +481,7 @@ impl MatchingToSample {
         self.phase = MtsPhase::Iti;
         self.phase_started = Some(now);
         self.pending_outcome_label = Some(label);
+        self.settle_correction(label);
     }
 
     fn finish_iti(&mut self, now: f64) {
@@ -570,6 +651,9 @@ impl Schedule for MatchingToSample {
         self.correct_operandum = self.pick_correct();
         self.last_now = None;
         self.pending_outcome_label = None;
+        self.repeats_done = 0;
+        self.repeat_next = false;
+        self.on_correction_trial = false;
         if let Some(c) = self.consequence.as_mut() {
             c.reset();
         }
