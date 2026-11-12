@@ -17,10 +17,12 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
-use crate::types::{Outcome, Reinforcer, ResponseEvent};
+use crate::types::{MetaValue, Outcome, Reinforcer, ResponseEvent};
 use crate::Result;
 
 /// Linearly-decaying interlocking ratio/interval schedule.
@@ -130,6 +132,18 @@ impl Schedule for InterlockingSchedule {
             return Ok(Outcome::reinforced(Reinforcer::at(now)));
         }
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "response_count".to_string(),
+            MetaValue::Int(self.count as i64),
+        );
+        if let Some(anchor) = self.anchor {
+            state.insert("anchor".to_string(), MetaValue::Float(anchor));
+        }
+        state
     }
 
     fn reset(&mut self) {

@@ -29,6 +29,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
@@ -148,6 +150,15 @@ impl Schedule for Sidman {
             return Ok(out);
         }
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "next_shock_time".to_string(),
+            MetaValue::Float(self.next_shock_time),
+        );
+        state
     }
 
     fn reset(&mut self) {
@@ -282,6 +293,12 @@ impl Schedule for DiscriminatedAvoidance {
 
         // Unreachable — only Iti and Warning exist.
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert("phase".to_string(), MetaValue::Str(self.phase().into()));
+        state
     }
 
     fn reset(&mut self) {
@@ -430,6 +447,12 @@ impl Schedule for Escape {
         }
 
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert("phase".to_string(), MetaValue::Str(self.phase().into()));
+        state
     }
 
     fn reset(&mut self) {

@@ -177,6 +177,7 @@ fn meta_to_py<'py>(
             MetaValue::Float(f) => dict.set_item(key, f)?,
             MetaValue::Str(s) => dict.set_item(key, s)?,
             MetaValue::StrList(v) => dict.set_item(key, v)?,
+            MetaValue::FloatList(v) => dict.set_item(key, v)?,
         }
     }
     Ok(dict)

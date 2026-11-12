@@ -18,11 +18,13 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
 use crate::helpers::checks::{check_event, check_time};
 use crate::schedule::Schedule;
-use crate::types::{Outcome, Reinforcer, ResponseEvent};
+use crate::types::{MetaValue, Outcome, Reinforcer, ResponseEvent};
 use crate::Result;
 
 /// Which parameter the adjusting schedule mutates.
@@ -104,7 +106,7 @@ impl AdjustingSchedule {
                 "AdjustingSchedule start must be > 0, got {start}"
             )));
         }
-        if matches!(target, AdjustingTarget::Ratio) && start.round() < 1.0 {
+        if matches!(target, AdjustingTarget::Ratio) && start.round_ties_even() < 1.0 {
             return Err(ContingencyError::Config(format!(
                 "AdjustingSchedule ratio start must round to >= 1, got {start}"
             )));
@@ -162,7 +164,8 @@ impl AdjustingSchedule {
         if event.is_none() {
             return Ok(Outcome::empty());
         }
-        let requirement = (self.current.round() as i64).max(1) as u64;
+        // Round half to even, as Python `round` does in contingency-py.
+        let requirement = (self.current.round_ties_even() as i64).max(1) as u64;
         self.count += 1;
         if self.count >= requirement {
             self.count = 0;
@@ -218,6 +221,12 @@ impl Schedule for AdjustingSchedule {
                 format!("target={:?} runtime not yet implemented", self.target),
             )),
         }
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert("current_value".to_string(), MetaValue::Float(self.current));
+        state
     }
 
     fn reset(&mut self) {

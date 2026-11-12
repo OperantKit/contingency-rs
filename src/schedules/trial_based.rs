@@ -28,6 +28,8 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
+use alloc::collections::BTreeMap;
+
 use crate::helpers::py_random::PyRandom;
 
 use crate::constants::TIME_TOL;
@@ -534,6 +536,27 @@ impl Schedule for MatchingToSample {
         Ok(self.phase_only_outcome())
     }
 
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert("phase".to_string(), MetaValue::Str(self.phase().into()));
+        state.insert(
+            "trial_index".to_string(),
+            MetaValue::Int(self.trial_index as i64),
+        );
+        state.insert(
+            "correct_operandum".to_string(),
+            MetaValue::Str(self.correct_operandum.clone()),
+        );
+        if let Some(i) = self.current_type_index {
+            state.insert("current_type_index".to_string(), MetaValue::Int(i as i64));
+        }
+        state.insert(
+            "current_positions".to_string(),
+            MetaValue::StrList(self.current_positions.clone()),
+        );
+        state
+    }
+
     fn reset(&mut self) {
         self.rng = make_rng(self.seed);
         self.phase = if self.sample_duration > 0.0 {
@@ -853,6 +876,20 @@ impl Schedule for GoNoGo {
         }
 
         Ok(self.phase_only_outcome())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert("phase".to_string(), MetaValue::Str(self.phase().into()));
+        state.insert(
+            "trial_index".to_string(),
+            MetaValue::Int(self.trial_index as i64),
+        );
+        state.insert(
+            "current_is_go".to_string(),
+            MetaValue::Bool(self.current_is_go),
+        );
+        state
     }
 
     fn reset(&mut self) {

@@ -33,7 +33,7 @@
 #[allow(unused_imports)]
 use crate::prelude::*;
 
-use alloc::collections::VecDeque;
+use alloc::collections::{BTreeMap, VecDeque};
 
 use crate::constants::TIME_TOL;
 use crate::errors::ContingencyError;
@@ -212,6 +212,15 @@ impl Schedule for Percentile {
             return Ok(out);
         }
         Ok(Outcome::empty())
+    }
+
+    fn state(&self) -> BTreeMap<String, MetaValue> {
+        let mut state = BTreeMap::new();
+        state.insert(
+            "samples".to_string(),
+            MetaValue::FloatList(self.window.iter().copied().collect()),
+        );
+        state
     }
 
     fn reset(&mut self) {

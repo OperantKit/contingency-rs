@@ -82,6 +82,8 @@ pub enum MetaValue {
     Str(String),
     /// Ordered list of strings (e.g. comparison stimuli in position order).
     StrList(Vec<String>),
+    /// Ordered list of numbers (e.g. the samples of a percentile window).
+    FloatList(Vec<f64>),
 }
 
 /// Result returned by `Schedule::step`.
