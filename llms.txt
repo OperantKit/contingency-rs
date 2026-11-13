@@ -37,7 +37,7 @@ A schedule is driven by `schedule.step(now, event)`; `event` is `Some(&ResponseE
 
 ## Docs
 
-- [README](https://github.com/OperantKit/contingency-rs/blob/main/README.md): scope, 30-second example, why not to hand-roll a schedule, semantic invariants
+- [README](https://github.com/OperantKit/contingency-rs/blob/main/README.md): scope, example, why not to hand-roll a schedule, semantic invariants
 - [AGENTS.md](https://github.com/OperantKit/contingency-rs/blob/main/AGENTS.md): when to use this crate and what not to do
 - [Correspondence with contingency-py](https://github.com/OperantKit/contingency-rs/blob/main/docs/en/correspondence.md): 1:1 mapping to the Python port
 
