@@ -88,12 +88,13 @@ const jsPsych = initJsPsych({
 
 ## 開発
 
-Node.js と、`wasm-pack` の入った Rust ツールチェーンが要ります（Node の版は `.mise.toml` で固定）。
+Node.js と、`wasm-pack` の入った Rust ツールチェーンが要ります（Node の版は `.mise.toml` で固定）。テストには、ページを配信する `python3`（`PATH` 上）と Playwright の Chromium も要ります。
 
 ```sh
 npm install
 npm run wasm:build      # Rust のソースから ../pkg をビルド
 npm run build           # dist/（ESM・CJS・<script> 用）と contingency_bg.wasm
+npx playwright install chromium   # 初回だけ
 npm run test:e2e        # ビルドしてから、このディレクトリを http で配信し、試行をクリックで進める
 ```
 

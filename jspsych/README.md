@@ -88,12 +88,13 @@ const jsPsych = initJsPsych({
 
 ## Development
 
-Node.js and the Rust toolchain with `wasm-pack` are required (`.mise.toml` pins Node).
+Node.js and the Rust toolchain with `wasm-pack` are required (`.mise.toml` pins Node). The tests also need `python3` on the `PATH`, which serves the pages, and Playwright's Chromium.
 
 ```sh
 npm install
 npm run wasm:build      # builds ../pkg from the Rust sources
 npm run build           # dist/ (ESM, CJS and <script> builds) plus contingency_bg.wasm
+npx playwright install chromium   # once
 npm run test:e2e        # builds, serves this directory over http and clicks through the trials
 ```
 
