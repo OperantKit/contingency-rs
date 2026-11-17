@@ -1271,7 +1271,11 @@ mod tests {
         let mut t = 0.0;
         for (sample, comps, correct, probe) in want {
             assert_eq!(mts.current_sample(), Some(sample));
-            let got: Vec<&str> = mts.current_comparisons().iter().map(String::as_str).collect();
+            let got: Vec<&str> = mts
+                .current_comparisons()
+                .iter()
+                .map(String::as_str)
+                .collect();
             assert_eq!(got, comps);
             assert_eq!(mts.correct_operandum(), correct);
             assert_eq!(mts.is_probe_trial(), probe);
@@ -1295,7 +1299,11 @@ mod tests {
         assert_eq!(out.meta.get("probe"), Some(&MetaValue::Bool(false)));
         assert_eq!(
             out.meta.get("comparisons"),
-            Some(&MetaValue::StrList(vec!["B2".into(), "B1".into(), "B3".into()]))
+            Some(&MetaValue::StrList(vec![
+                "B2".into(),
+                "B1".into(),
+                "B3".into()
+            ]))
         );
         assert_eq!(
             out.meta.get("trial_outcome"),
@@ -1318,10 +1326,18 @@ mod tests {
     fn mts_probe_does_not_step_nested_schedules() {
         // FR 2 consequence: if the probe trial stepped it, the next
         // baseline correct choice would be reinforced.
-        let mut mts = MatchingToSample::new(3, 0.0, 2.0, Some(Box::new(FR::new(2).unwrap())), None, 1.0, Some(3))
-            .unwrap()
-            .with_trial_types(Some(ab_types()), Some(ba_types()))
-            .unwrap();
+        let mut mts = MatchingToSample::new(
+            3,
+            0.0,
+            2.0,
+            Some(Box::new(FR::new(2).unwrap())),
+            None,
+            1.0,
+            Some(3),
+        )
+        .unwrap()
+        .with_trial_types(Some(ab_types()), Some(ba_types()))
+        .unwrap();
         let mut t = 0.0;
         let mut reinforced = Vec::new();
         for _ in 0..6 {
@@ -1337,10 +1353,18 @@ mod tests {
 
     #[test]
     fn mts_probe_timeout_does_not_step_incorrect() {
-        let mut mts = MatchingToSample::new(3, 0.0, 2.0, None, Some(Box::new(FT::new(0.0001).unwrap())), 1.0, Some(3))
-            .unwrap()
-            .with_trial_types(Some(ab_types()), Some(ba_types()))
-            .unwrap();
+        let mut mts = MatchingToSample::new(
+            3,
+            0.0,
+            2.0,
+            None,
+            Some(Box::new(FT::new(0.0001).unwrap())),
+            1.0,
+            Some(3),
+        )
+        .unwrap()
+        .with_trial_types(Some(ab_types()), Some(ba_types()))
+        .unwrap();
         // Trial 0 and 1 are baseline; answer them, then let probe trial 2 time out.
         for t in [0.0, 2.0] {
             let op = mts.correct_operandum().to_string();
@@ -1350,7 +1374,10 @@ mod tests {
         assert!(mts.is_probe_trial());
         let out = mts.step(5.5, None).unwrap();
         assert!(!out.reinforced);
-        assert_eq!(out.meta.get("trial_outcome"), Some(&MetaValue::Str("incorrect".into())));
+        assert_eq!(
+            out.meta.get("trial_outcome"),
+            Some(&MetaValue::Str("incorrect".into()))
+        );
         assert!(out.meta.get("choice").is_none());
     }
 
@@ -1375,13 +1402,22 @@ mod tests {
             .with_trial_types(Some(vec![TrialType::new("A1", "B1", ["B1", "B2"])]), None)
             .is_err());
         assert!(base()
-            .with_trial_types(Some(vec![TrialType::new("A1", "B9", ["B1", "B2", "B3"])]), None)
+            .with_trial_types(
+                Some(vec![TrialType::new("A1", "B9", ["B1", "B2", "B3"])]),
+                None
+            )
             .is_err());
         assert!(base()
-            .with_trial_types(Some(vec![TrialType::new("A1", "B1", ["B1", "B1", "B3"])]), None)
+            .with_trial_types(
+                Some(vec![TrialType::new("A1", "B1", ["B1", "B1", "B3"])]),
+                None
+            )
             .is_err());
         assert!(base()
-            .with_trial_types(Some(ab_types()), Some(vec![TrialType::new("B1", "A1", ["A1", "A2"])]))
+            .with_trial_types(
+                Some(ab_types()),
+                Some(vec![TrialType::new("B1", "A1", ["A1", "A2"])])
+            )
             .is_err());
     }
 

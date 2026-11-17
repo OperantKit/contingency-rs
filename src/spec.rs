@@ -353,20 +353,22 @@ pub fn from_spec(spec: &Value) -> Result<Box<dyn Schedule>> {
         )?),
 
         // --- trial-based ------------------------------------------------
-        "MatchingToSample" => Box::new(MatchingToSample::new(
-            p.req_u32("n_comparisons")?,
-            p.opt_f64("sample_duration")?.unwrap_or(0.0),
-            p.opt_f64("choice_timeout")?.unwrap_or(5.0),
-            p.opt_schedule("consequence")?,
-            p.opt_schedule("incorrect")?,
-            p.opt_f64("iti")?.unwrap_or(1.0),
-            p.opt_u64("seed")?,
-        )?
-        .with_trial_types(
-            p.opt_trial_types("trial_types")?,
-            p.opt_trial_types("probe_trial_types")?,
-        )?
-        .with_correction(p.opt_correction("correction")?)?),
+        "MatchingToSample" => Box::new(
+            MatchingToSample::new(
+                p.req_u32("n_comparisons")?,
+                p.opt_f64("sample_duration")?.unwrap_or(0.0),
+                p.opt_f64("choice_timeout")?.unwrap_or(5.0),
+                p.opt_schedule("consequence")?,
+                p.opt_schedule("incorrect")?,
+                p.opt_f64("iti")?.unwrap_or(1.0),
+                p.opt_u64("seed")?,
+            )?
+            .with_trial_types(
+                p.opt_trial_types("trial_types")?,
+                p.opt_trial_types("probe_trial_types")?,
+            )?
+            .with_correction(p.opt_correction("correction")?)?,
+        ),
         "GoNoGo" => Box::new(GoNoGo::new(
             p.opt_f64("go_probability")?.unwrap_or(0.5),
             p.opt_f64("response_window")?.unwrap_or(5.0),
@@ -581,10 +583,14 @@ impl<'a> Params<'a> {
         let Some(v) = self.get(key) else {
             return Ok(None);
         };
-        let arr = v.as_array().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let arr = v
+            .as_array()
+            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
         arr.iter()
             .map(|t| {
-                let obj = t.as_object().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+                let obj = t
+                    .as_object()
+                    .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
                 let text = |field: &str| {
                     obj.get(field)
                         .and_then(Value::as_str)
@@ -602,7 +608,11 @@ impl<'a> Params<'a> {
                             .ok_or_else(|| self.wrong_type(key, EXPECTED, v))
                     })
                     .collect::<Result<Vec<_>>>()?;
-                Ok(TrialType::new(text("sample")?, text("correct")?, comparisons))
+                Ok(TrialType::new(
+                    text("sample")?,
+                    text("correct")?,
+                    comparisons,
+                ))
             })
             .collect::<Result<Vec<_>>>()
             .map(Some)
@@ -655,7 +665,9 @@ impl<'a> Params<'a> {
         let Some(v) = self.get(key) else {
             return Ok(None);
         };
-        let arr = v.as_array().ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
+        let arr = v
+            .as_array()
+            .ok_or_else(|| self.wrong_type(key, EXPECTED, v))?;
         let mut out: IndexMap<(String, String), f64> = IndexMap::default();
         for entry in arr {
             let obj = entry

@@ -447,12 +447,22 @@ fn concurrent_cod_directional_and_punish_are_passed_through() {
     let mut s = build(conc(json!({
         "cod": 0.5,
         "cod_directional": [{"from": "a", "to": "b", "cod": 2.0}]})));
-    let out = run(s.as_mut(), &[(0.0, Some("a")), (1.0, Some("b")), (2.0, Some("b")), (3.5, Some("b"))]);
+    let out = run(
+        s.as_mut(),
+        &[
+            (0.0, Some("a")),
+            (1.0, Some("b")),
+            (2.0, Some("b")),
+            (3.5, Some("b")),
+        ],
+    );
     assert_eq!(reinforced_at(&out), vec![0, 3]);
 
     // An FR 1 punisher on a turns every a response into a net-zero
     // delivery; b is untouched.
-    let mut s = build(conc(json!({"punish": {"a": {"type": "FR", "params": {"n": 1}}}})));
+    let mut s = build(conc(
+        json!({"punish": {"a": {"type": "FR", "params": {"n": 1}}}}),
+    ));
     let out = run(s.as_mut(), &[(1.0, Some("a")), (2.0, Some("b"))]);
     let a = out[0].reinforcer.as_ref().expect("a delivers");
     assert!(a.magnitude.abs() < 1e-9, "net magnitude {}", a.magnitude);
