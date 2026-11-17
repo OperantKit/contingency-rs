@@ -19,12 +19,12 @@ operant behavior* (pp. 201-232). Prentice-Hall.
 
 ---
 
-## DRO — 他行動の分化強化 (Differential Reinforcement of Other behavior)
+## DRO — 他行動分化強化 (Differential Reinforcement of Other behavior)
 
 一定間隔にわたる反応の **不在** を強化する。2 つのバリアントが
 サポートされる。
 
-### Resetting バリアント（デフォルト）
+### Resetting バリアント (デフォルト)
 
 各反応は DRO タイマーを `now` にリセットする。間に反応を挟むこと
 なく `now - anchor >= interval` を満たす最初の **tick** で強化子が
@@ -94,7 +94,7 @@ fn step(now, event):
 
 ---
 
-## DRL — 低頻度反応の分化強化 (Differential Reinforcement of Low rate)
+## DRL — 低反応率分化強化 (Differential Reinforcement of Low rate)
 
 反応間時間 (IRT) が少なくとも `interval` 以上の反応を強化する。
 
@@ -104,7 +104,7 @@ fn step(now, event):
 
 - 構築 / リセット以降の **最初** の反応であるか、**または**
 - 前回の反応が `now` より少なくとも `interval` 前に発生している
-  （TOL の余裕を伴って `now - last_response_time >= interval`）。
+  (TOL の余裕を伴って `now - last_response_time >= interval`)。
 
 強化されるか否かに関わらず、**すべて** の反応が
 `last_response_time` を更新する。`event=None` の tick は決して強化
@@ -139,16 +139,16 @@ fn step(now, event):
 
 ---
 
-## DRH — 高頻度反応の分化強化 (Differential Reinforcement of High rate)
+## DRH — 高反応率分化強化 (Differential Reinforcement of High rate)
 
-直近 `time_window` 時間単位（スライディング・ウィンドウ）内に少な
+直近 `time_window` 時間単位 (スライディング・ウィンドウ) 内に少な
 くとも `response_count` 個の反応が発生しているときに反応を強化する。
 
 ### 定義
 
-直近の反応タイムスタンプの FIFO を維持する。各ステップ（tick か
-反応か）で、`now - time_window` より厳密に古いタイムスタンプを
-（TOL の余裕を伴って）evict する。反応時、右側に `now` を追加する。
+直近の反応タイムスタンプの FIFO を維持する。各ステップ (tick か
+反応か) で、`now - time_window` より厳密に古いタイムスタンプを
+(TOL の余裕を伴って) evict する。反応時、右側に `now` を追加する。
 ウィンドウが `>= response_count` を保持していれば、強化する。
 
 ウィンドウは強化時に **空にならない** — 持続する高頻度応答列は、
@@ -191,7 +191,7 @@ fn evict_old(now):
 
 - `response_count < 1` または `time_window <= 0`: `Config`。
 - 境界: ちょうど `now - time_window` のタイムスタンプはウィンドウ
-  内に留まる（TOL 余裕付きの包含的）。
+  内に留まる (TOL 余裕付きの包含的)。
 - DSL ブリッジが使用する DRH は常に `response_count = 2` で構成
   される: DSL の `DRHNs` 表現は時間値のみを運び、最大 IRT として
   解釈される。

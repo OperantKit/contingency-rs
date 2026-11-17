@@ -1,4 +1,4 @@
-# VI — 変動間隔 (Variable Interval)
+# VI — 変動時隔 (Variable Interval)
 
 :gb: [English version](../../en/algorithms/vi.md)
 
@@ -24,12 +24,12 @@ Behavior*, 5(4), 529-530. https://doi.org/10.1901/jeab.1962.5-529
 | 名前 | 型 | 用途 |
 |---|---|---|
 | `mean_interval` | float (const) | 目標算術平均。 |
-| `n_intervals` | int (const) | サイクルごとのプールサイズ（デフォルト 12）。 |
+| `n_intervals` | int (const) | サイクルごとのプールサイズ (デフォルト 12)。 |
 | `seed` | int? (const) | マスタシード。 |
 | `rng` | Random | サブシードを引く (`rng.getrandbits(64)`)。 |
 | `sequence` | list[float] | 現在の間隔長プール。 |
-| `cursor` | int | `sequence` への次インデックス（1 から始まる。インデックス 0 は `arm_time` で消費）。 |
-| `arm_time` | float | 次の強化目標時刻（`sequence[0]` に初期化）。 |
+| `cursor` | int | `sequence` への次インデックス (1 から始まる。インデックス 0 は `arm_time` で消費)。 |
+| `arm_time` | float | 次の強化目標時刻 (`sequence[0]` に初期化)。 |
 | `last_now` | float? | 単調時間チェック用。 |
 
 ## Step 擬似コード

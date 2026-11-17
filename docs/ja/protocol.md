@@ -19,7 +19,7 @@ Python 側の定義：
 - `contingency-py/src/contingency/entities.py` — 値オブジェクト。
 - `contingency-py/src/contingency/errors.py` — エラー分類体系。
 
-Rust 側のミラー（本 crate の navigation ポインタ）：
+Rust 側のミラー (本 crate の navigation ポインタ)：
 
 - [src/schedule.rs](../../src/schedule.rs) — `Schedule` トレイト。
 - [src/types.rs](../../src/types.rs) — 値オブジェクト。
@@ -37,11 +37,11 @@ pub trait Schedule {
 ```
 
 スケジュールは状態を持つため、可変借用が必要。内部可変性を必要とする
-実装者（例: `Box<dyn Schedule>` を保持するラッパ）は trait レベルで
+実装者 (例: `Box<dyn Schedule>` を保持するラッパ) は trait レベルで
 `&mut self` を使用し、RNG / カウンタを private フィールドに保持する。
 内部値へ再ディスパッチする専用の `Box<dyn Schedule>` 実装が提供される。
 
-### Python（正典）
+### Python (正典)
 
 ```python
 @runtime_checkable
@@ -54,17 +54,17 @@ class Schedule(Protocol):
 
 ### `step(now, event)`
 
-1. **単調時間**。`now` は `>= last_now` でなければならない（ここで
+1. **単調時間**。`now` は `>= last_now` でなければならない (ここで
    `last_now` は前回の呼び出しで渡された `now`。初回呼び出し前は
-   未設定）。`now < last_now - 1e-9` の場合、スケジュールは
+   未設定)。`now < last_now - 1e-9` の場合、スケジュールは
    `ScheduleStateError` を送出する。
 2. **イベントタイムスタンプ整合性**。`event` が `None` でない場合、
    `|event.time - now| <= 1e-9`。そうでなければ `ScheduleStateError`
    を送出する。
 3. **呼び出しごとに単一 Outcome**。ちょうど 1 つの `Outcome` が返る。
    前回のステップから経過した時間が複数のスケジュール間隔より大き
-   くても、本ステップで発火する強化子は最大 1 つ（時間ベース・
-   スケジュールは発火後に `now` で再アンカーする）。
+   くても、本ステップで発火する強化子は最大 1 つ (時間ベース・
+   スケジュールは発火後に `now` で再アンカーする)。
 4. **`event=None` で冪等**。純粋な tick が強化子を生成するかどうかは
    スケジュール・ファミリに依存する:
    - 比率スケジュール (FR, VR, RR): tick では決して強化しない。
@@ -95,12 +95,12 @@ class Schedule(Protocol):
     時に RNG 状態をスナップショットし、復元する。
 - カウンタはゼロに、シーケンス・カーソルは巻き戻り、シーケンス・
   プールはシード付きならビット同一に再生成される。
-- `last_now` と時間アンカーは `None`（未設定）になる。
+- `last_now` と時間アンカーは `None` (未設定) になる。
 - 複合スケジュールは全コンポーネントに `reset()` を伝播し、続いて
   自身の記録をクリアする。
 
-`reset()` は構成済みパラメータ（比率、平均、ステップ関数、コンポ
-ーネントリスト、COD 値など）を **変更しない**。
+`reset()` は構成済みパラメータ (比率、平均、ステップ関数、コンポ
+ーネントリスト、COD 値など) を **変更しない**。
 
 ## 値オブジェクト
 
@@ -124,7 +124,7 @@ class ResponseEvent:
     operandum: str = "main"
 ```
 
-- `operandum` は押された operandum（レバー、キー、ボタン）を識別
+- `operandum` は押された operandum (レバー、キー、ボタン) を識別
   する。`Concurrent` がイベントをルーティングするために使用する。
 - デフォルト `"main"` は非複合スケジュールで使用される。複合
   スケジュールがルーティングに使用しない限り、値は検査されない。
@@ -147,7 +147,7 @@ class Observation:
 ```
 
 Observation は現在ランタイム自身では使用されていないスナップ
-ショット（将来の analyser フック用に保持）。
+ショット (将来の analyser フック用に保持)。
 
 ### `Reinforcer`
 
@@ -168,7 +168,7 @@ class Reinforcer:
     label: str = "SR+"
 ```
 
-- `magnitude` は量（ペレット数、ml、ポイント）をエンコードする。
+- `magnitude` は量 (ペレット数、ml、ポイント) をエンコードする。
 - 負の magnitude + `label="SR-"` で嫌悪制御をモデル化する。
 - 本ライブラリのすべてのスケジュールは、実験用ラッパが上書きしない
   限り magnitude `1.0`、`label="SR+"` で強化子を発生させる。両ポートで
@@ -193,7 +193,7 @@ class Outcome:
     meta: dict[str, object] = field(default_factory=dict)
 ```
 
-**構築時に強制される不変条件**（両ポート）:
+**構築時に強制される不変条件**(両ポート):
 - `reinforced == true` ⟺ `reinforcer.is_some()`。
 
 Rust は不変条件を強制する安全なコンストラクタのみを公開する:
@@ -218,7 +218,7 @@ impl Outcome {
 - `Multiple` / `Chained`: 現在活性なコンポーネントの刺激ラベルを
   `current_component: str` に設定し、`Chained` の非終端リンク遷移時
   には `chain_transition: bool` を設定する。
-- `Tandem`: `current_component: int`（活性リンクインデックス）を
+- `Tandem`: `current_component: int` (活性リンクインデックス) を
   設定する。
 - `Alternative`: `alternative_winner: "first" | "second"` を設定する。
 
@@ -248,7 +248,7 @@ pub type Result<T> = std::result::Result<T, ContingencyError>;
 `Schedule` トレイトの `step()` は `Result<Outcome>` を返す。Rust crate
 ではすべての状態違反で panic ではなく `Err` を優先する。
 
-### Python（正典）
+### Python (正典)
 
 ```
 ContingencyError (base)
@@ -260,10 +260,10 @@ ContingencyError (base)
 
 | Python クラス | Rust variant | 発生条件 |
 |---|---|---|
-| `ScheduleConfigError` | `ContingencyError::Config` | 不正なコンストラクタ引数（負の比率、未知のコンビネータ） |
-| `ScheduleStateError` | `ContingencyError::State` | `step()` 契約違反（非単調時間、event/now の不一致） |
+| `ScheduleConfigError` | `ContingencyError::Config` | 不正なコンストラクタ引数 (負の比率、未知のコンビネータ) |
+| `ScheduleStateError` | `ContingencyError::State` | `step()` 契約違反 (非単調時間、event/now の不一致) |
 | `HardwareError` | `ContingencyError::Hardware` | HAL I/O、トランスポート、設定、依存の欠如 |
-| `NotConnectedError` | `ContingencyError::Hardware`（プレフィックス付きメッセージ） | `connect()` 前または `disconnect()` 後の HAL read/write |
+| `NotConnectedError` | `ContingencyError::Hardware` (プレフィックス付きメッセージ) | `connect()` 前または `disconnect()` 後の HAL read/write |
 
 `NotConnectedError` は Rust では意図的に `Hardware(..)` に内包する。
 両者を区別する必要がある呼び出し側はメッセージ文字列のプレフィックスを
@@ -278,7 +278,7 @@ ContingencyError (base)
 pub const TIME_TOL: f64 = 1e-9;
 ```
 
-Python（正典）では `interfaces` モジュール内で `_TIME_TOL = 1e-9` として
+Python (正典) では `interfaces` モジュール内で `_TIME_TOL = 1e-9` として
 定義される。
 
 両ポートで同一に適用される:
@@ -290,7 +290,7 @@ Python（正典）では `interfaces` モジュール内で `_TIME_TOL = 1e-9` �
   で eviction。
 - LimitedHold 失効: `now > arm_time + hold + TIME_TOL` で失効。
 
-この定数は conformance コーパスにとって load-bearing（負荷を支える）。
+この定数は conformance コーパスにとって load-bearing (負荷を支える)。
 
 ## スレッディング・モデル
 

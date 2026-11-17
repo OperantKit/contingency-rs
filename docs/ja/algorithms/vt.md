@@ -14,7 +14,7 @@ https://doi.org/10.1901/jeab.1962.5-529
 
 ## 数学的定義
 
-（FT と同じく）反応非依存の強化であるが、強化子間間隔は平均
+(FT と同じく) 反応非依存の強化であるが、強化子間間隔は平均
 `mean_interval` の Fleshler-Hoffman 進行からサンプルされる。プールが
 尽きると、決定論的に新しいプールが再生成される。
 
@@ -25,7 +25,7 @@ VR と同じ。ただし反応カウンタを `anchor` が置き換える:
 | 名前 | 型 | 用途 |
 |---|---|---|
 | `mean` | float (const) | 目標算術平均。 |
-| `n_intervals` | int (const) | サイクルごとのプールサイズ（デフォルト 12）。 |
+| `n_intervals` | int (const) | サイクルごとのプールサイズ (デフォルト 12)。 |
 | `seed` | int? (const) | マスタシード。 |
 | `rng` | Random | サブシード生成用のマスタ RNG。 |
 | `sequence` | list[float] | 現在の間隔長プール。 |
@@ -34,7 +34,7 @@ VR と同じ。ただし反応カウンタを `anchor` が置き換える:
 | `anchor` | float? | 経過時間基準。最初のステップ前は `None`。 |
 | `last_now` | float? | 単調時間チェック用。 |
 
-サブシード定義域: `rng.randrange(0, 2**31 - 1)`（VR と同じ）。
+サブシード定義域: `rng.randrange(0, 2**31 - 1)` (VR と同じ)。
 
 ## Step 擬似コード
 
@@ -56,7 +56,7 @@ fn step(now, event):
 ## Reset セマンティクス
 
 - `rng = Random(seed)`
-- シーケンスを決定論的に再生成（構築直後と同じ軌跡）
+- シーケンスを決定論的に再生成 (構築直後と同じ軌跡)
 - `anchor = None`
 - `last_now = None`
 

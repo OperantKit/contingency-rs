@@ -44,7 +44,7 @@ fn step(now, event):
 ## Reset セマンティクス
 
 - `rng.setstate(initial_state)`
-- `arm_time = rng.expovariate(1 / mean_interval)`（新たな初期引き）
+- `arm_time = rng.expovariate(1 / mean_interval)` (新たな初期引き)
 - `last_now = None`
 
 注: `reset()` 後の最初の引きは復元された RNG 状態から来るため、
@@ -53,12 +53,12 @@ fn step(now, event):
 ## エッジケース
 
 - `mean_interval <= 0` は `Config` を送出。
-- legacy ソースの RI の Swift オリジナル（FI 上の no-op ラッパ）と
+- legacy ソースの RI の Swift オリジナル (FI 上の no-op ラッパ) と
   同様、現在の実装は間隔機構の上に指数サンプリングを追加している。
 
 ## LimitedHold フック
 
-- `_arm_time`, `_withdraw_and_rearm(now)`（新しい指数間隔を引く）。
+- `_arm_time`, `_withdraw_and_rearm(now)` (新しい指数間隔を引く)。
 
 ## 決定性
 

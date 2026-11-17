@@ -10,7 +10,7 @@ the responding maintained by interval schedules of reinforcement.
 
 ## 数学的定義
 
-（FT と同じく）反応非依存の強化。強化子間間隔は
+(FT と同じく) 反応非依存の強化。強化子間間隔は
 `Exp(1 / mean_interval)` からサンプルされる。無記憶: 経過時間に
 かかわらず一定のハザード `1 / mean_interval`。
 
@@ -21,7 +21,7 @@ the responding maintained by interval schedules of reinforcement.
 | `mean` | float (const) | 指数分布の平均。 |
 | `rng` | Random | `expovariate` の供給源。 |
 | `initial_state` | Random.State | 構築時のスナップショット。 |
-| `requirement` | float | 現在の間隔長（構築時に引かれ、発火後に再度引かれる）。 |
+| `requirement` | float | 現在の間隔長 (構築時に引かれ、発火後に再度引かれる)。 |
 | `anchor` | float? | 基準時刻。最初のステップ前は `None`。 |
 | `last_now` | float? | 単調時間チェック用。 |
 
@@ -45,7 +45,7 @@ fn step(now, event):
 ## Reset セマンティクス
 
 - `rng.setstate(initial_state)`
-- `requirement = rng.expovariate(1 / mean)`（新たな初期引き）
+- `requirement = rng.expovariate(1 / mean)` (新たな初期引き)
 - `anchor = None`
 - `last_now = None`
 

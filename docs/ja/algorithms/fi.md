@@ -1,4 +1,4 @@
-# FI — 固定間隔 (Fixed Interval)
+# FI — 固定時隔 (Fixed Interval)
 
 :gb: [English version](../../en/algorithms/fi.md)
 
@@ -14,19 +14,19 @@ the responding maintained by interval schedules of reinforcement.
 
 ## 数学的定義
 
-構築時（または前回の強化子以降）から `interval` 時間単位以上経過
+構築時 (または前回の強化子以降) から `interval` 時間単位以上経過
 した後に最初に発せられた反応が強化される。間隔中の反応はクロックを
 リセットせず、強化もされない。Tick (`event=None`) は決して強化
 しない — スケジュールは反応を要求する。
 
-判定基準（Swift オリジナル）: `numOfResponses > previousNumOfResponses
+判定基準 (Swift オリジナル): `numOfResponses > previousNumOfResponses
 AND elapsed >= interval`。
 
 ## 状態変数
 
 | 名前 | 型 | 用途 |
 |---|---|---|
-| `interval` | float (const) | 固定間隔長 (`> 0`)。 |
+| `interval` | float (const) | 固定時隔長 (`> 0`)。 |
 | `arm_time` | float | 次の反応が強化可能になる絶対時刻。`interval` に初期化。 |
 | `last_now` | float? | 単調時間チェック用。 |
 

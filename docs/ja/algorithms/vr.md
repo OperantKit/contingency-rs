@@ -25,7 +25,7 @@ Behavior*, 5(4), 529-530. https://doi.org/10.1901/jeab.1962.5-529
 | 名前 | 型 | 用途 |
 |---|---|---|
 | `mean` | float (const) | 目標とする算術平均比率。 |
-| `n_intervals` | int (const) | サイクルごとのプールサイズ（デフォルト 12）。 |
+| `n_intervals` | int (const) | サイクルごとのプールサイズ (デフォルト 12)。 |
 | `seed` | int? (const) | 決定性のためのマスタシード。 |
 | `rng` | Random | マスタ RNG。サイクルごとのサブシードを導出。 |
 | `sequence` | list[int] | 現在の比率要件プール。 |
@@ -66,7 +66,7 @@ fn reload_sequence():
 
 ## Reset セマンティクス
 
-- `rng = Random(seed)`（保存されたマスタシードから再シード）
+- `rng = Random(seed)` (保存されたマスタシードから再シード)
 - `count = 0`
 - `last_now = None`
 - シーケンス再生成: `reload_sequence()` — `seed` が設定されている

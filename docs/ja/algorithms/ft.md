@@ -16,8 +16,8 @@ the responding maintained by interval schedules of reinforcement.
 ## 数学的定義
 
 被験体の行動とは無関係に、`interval` 時間単位ごとに強化子が供給
-される。強化決定については反応は無視される（ただしタイムスタンプ
-は依然として検証される）。
+される。強化決定については反応は無視される (ただしタイムスタンプ
+は依然として検証される)。
 
 `now - anchor >= interval` になり次第発火する。ここで `anchor` は
 スケジュールの内部基準時刻。

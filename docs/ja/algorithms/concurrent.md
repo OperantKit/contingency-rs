@@ -1,4 +1,4 @@
-# Concurrent — チェンジオーバー遅延 / 比率付き複合
+# Concurrent — 切り替え遅延 / 比率付き複合
 
 :gb: [English version](../../en/algorithms/concurrent.md)
 
@@ -20,7 +20,7 @@ https://doi.org/10.1901/jeab.1961.4-267
 反応は `components[key]` にルーティングされ、他のすべてのコンポ
 ーネントは同じ `now` で tick を受け取る。
 
-### チェンジオーバー遅延 (COD)
+### 切り替え遅延 (COD)
 
 被験体が operandum A から B に切り替えたとき、切り替え後 `cod`
 時間単位の間、新しい operandum 上の反応は強化されない。タイマー
@@ -29,7 +29,7 @@ https://doi.org/10.1901/jeab.1961.4-267
 
 COD の間に B のコンポーネントが設定した強化子は捨てられず、
 **保持される**。COD が明けた後の B への最初の反応で渡され、B の
-コンポーネントはその受け渡しまで次の間隔（または比率）を始めな
+コンポーネントはその受け渡しまで次の間隔 (または比率) を始めな
 い。COD の間に B を離れても、強化子は B に残る。これは Herrnstein
 (1961) の手続きである。切り替えから 1.5 秒以内の反応は強化され
 ず、設定された強化子は取られるまで残っていた。
@@ -52,9 +52,9 @@ B の強化子を保持した step で別のコンポーネントが時間経過
 | `cod` | float (const) | COD 持続時間 (`>= 0`; `0` で無効)。 |
 | `frco` | int (const) | FRCO 閾値 (`>= 0`; `0` で無効)。 |
 | `last_operandum` | str? | 最新の **確定** 反応の operandum。 |
-| `switch_time` | float? | 最後の確定チェンジオーバーの時刻（COD 用）。 |
+| `switch_time` | float? | 最後の確定チェンジオーバーの時刻 (COD 用)。 |
 | `consecutive_new_count` | int | FRCO 連続中のランニング・カウント。 |
-| `pending` | dict[str, list[Reinforcer]] | 複合側が operandum ごとに保持する強化子（古い順。FR/VR/RR/FI/VI/RI 以外のコンポーネント用）。 |
+| `pending` | dict[str, list[Reinforcer]] | 複合側が operandum ごとに保持する強化子 (古い順。FR/VR/RR/FI/VI/RI 以外のコンポーネント用)。 |
 | `last_now` | float? | 単調時間チェック用。 |
 
 ## Step 擬似コード
@@ -106,8 +106,8 @@ from_event, held)` を返す:
 1. イベント・マッチしたコンポーネントの outcome が強化した場合
    → `from_event=True`。
 2. そうでなければ、他のコンポーネントから最初に強化した tick
-   outcome（挿入順）→ `from_event=False`。
-3. そうでなければ、イベント・マッチしたコンポーネントの（強化なし）
+   outcome (挿入順) → `from_event=False`。
+3. そうでなければ、イベント・マッチしたコンポーネントの (強化なし)
    outcome をその `meta` を保持したまま → `from_event=True`。
 4. そうでなければ空の `Outcome()` → `from_event=False`。
 
@@ -142,7 +142,7 @@ return out, held=false
 そこから始まる。強化しない反応は本物のコンポーネントに適用するの
 で、COD 中の反応も比率の数に入る。
 
-それ以外のコンポーネント（FT/VT/RT、DRO/DRL/DRH、入れ子の複合）
+それ以外のコンポーネント (FT/VT/RT、DRO/DRL/DRH、入れ子の複合)
 は tick で強化したり、すべての反応を見る必要があったりするので、
 反応を渡さないと強化子が失われるか、コンポーネントの状態が狂う。
 そこで反応は通常どおり適用し、出た強化子を `pending` に積む。コン
@@ -150,8 +150,8 @@ return out, held=false
 
 Rust 版では型の判定に `Schedule::probe_response` を使う。FR・VR・RR・
 FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返し、
-それ以外のスケジュール（`LimitedHold` と利用者定義のスケジュールを
-含む）は既定の `None` を返して待ち行列の経路に入る。`pending` は
+それ以外のスケジュール (`LimitedHold` と利用者定義のスケジュールを
+含む) は既定の `None` を返して待ち行列の経路に入る。`pending` は
 `IndexMap<String, VecDeque<Reinforcer>>` である。
 
 ### `deliver_pending(operandum, now, outcome, from_event)`
@@ -159,7 +159,7 @@ FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返
 ゲートされていない反応について `advance_components` の後に呼ぶ。
 `pending[operandum]` が空なら入力をそのまま返す。そうでなければ、
 この反応でコンポーネントが出した強化子を列の末尾に積み、最も古い
-ものを `time = now`（`from_event = true`）で渡す。1 反応で渡す強化
+ものを `time = now` (`from_event = true`) で渡す。1 反応で渡す強化
 子は高々 1 つである。`reset()` は `pending` を空にする。
 
 ### `register_event(operandum, now)`
@@ -172,8 +172,8 @@ FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返
   - `frco == 0` の場合: `switch_time = now`、
     `last_operandum = operandum`、連続リセット。即時チェンジオーバー。
   - `frco > 0` の場合: `consecutive_new_count` をインクリメント。
-    `frco` に達したときチェンジオーバーを確定する（`switch_time = now`、
-    `last_operandum = operandum`、連続リセット）。
+    `frco` に達したときチェンジオーバーを確定する (`switch_time = now`、
+    `last_operandum = operandum`、連続リセット)。
 
 ### `cod_active(operandum, now)`
 
@@ -181,8 +181,8 @@ FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返
 
 - `cod > 0`
 - `switch_time is not None`
-- `operandum == last_operandum`（ゲーティングは切り替え **先** の
-  operandum にのみ適用される）
+- `operandum == last_operandum` (ゲーティングは切り替え **先** の
+  operandum にのみ適用される)
 - `(now - switch_time) < cod - TIME_TOL`
 
 ## Reset セマンティクス
@@ -207,7 +207,7 @@ FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返
   タイマー発火強化が同じ `step()` 呼び出しに落ちた場合、B の強化
   は `from_event=False` で表面化され、COD ゲートされない。
 - 同じ tick で複数の非イベント・コンポーネントが発火した場合、
-  最初（挿入順）が勝ち、他は暗黙に破棄される。呼び出し側はこれ
+  最初 (挿入順) が勝ち、他は暗黙に破棄される。呼び出し側はこれ
   を避けるため十分な頻度でステップすべき。
 
 ## 方向別 COD
@@ -216,7 +216,7 @@ FI・VI・RI は自分の `clone` を step して `Some(強化するか)` を返
 `(from_operandum, to_operandum)` → 秒のマップで、マッチする
 トランジションが発生したときに、そのスイッチに限り基本 `cod` を
 方向別の値で置き換える。自己トランジションおよび負値は構築時に
-拒否される（`Config` エラー）。マップに存在しない方向については
+拒否される (`Config` エラー)。マップに存在しない方向については
 基本 `cod` が引き続き適用される。
 
 Rust では `Concurrent` の `cod_directional: IndexMap<(String, String), f64>`
@@ -225,11 +225,11 @@ Rust では `Concurrent` の `cod_directional: IndexMap<(String, String), f64>`
 
 ## 成分形式の罰
 
-`punish: dict[str, Schedule]`（Rust:
-`IndexMap<String, Box<dyn Schedule>>`）は、強化判定後に step される
+`punish: dict[str, Schedule]` (Rust:
+`IndexMap<String, Box<dyn Schedule>>`) は、強化判定後に step される
 オペランダムごとの罰スケジュールを取り付ける。罰スケジュールは
 メイン成分と COD 状態を **共有しない**。これらのサブスケジュール
-が発行する負振幅の強化子（`label="SR-"`）は、返却される `Outcome`
+が発行する負振幅の強化子 (`label="SR-"`) は、返却される `Outcome`
 にアクティブな強化子として現れる。1 回の step 内で強化と罰は相互
 排他である。
 

@@ -11,7 +11,7 @@
 Python パッケージ `contingency-py` が executable specification の
 正典である。`contingency-py/conformance/` 配下の 23 個の conformance
 fixture が、seed 付きの確率的スケジュールを含む全スケジュールに対する
-bit 等価性のオラクルとなる（§4）。
+bit 等価性のオラクルとなる (§4)。
 
 DSL のパースは意図的に **Python 専用**である。Rust ランタイムは
 `ScheduleBuilder` で直接構築されたスケジュールを受け付ける。
@@ -19,7 +19,7 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 駆動したい場合は、`contingency-py` でパースしてから FFI 境界を
 跨いでスケジュールを転送する。
 
-## 0. Wave 別追加項目（時系列）
+## 0. Wave 別追加項目 (時系列)
 
 直近の各 wave で何が追加されたかの簡略マップ。順序は概ね時系列だが、
 正確な来歴は `git log` を参照。
@@ -37,15 +37,15 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 |---|---|---|
 | `src/contingency/__init__.py` | `src/lib.rs` | 公開 API の re-export。命名は保持。 |
 | `src/contingency/entities.py` | `src/types.rs` | `ResponseEvent` / `Observation` / `Reinforcer` / `Outcome`。Rust では Python の `dict[str, object]` meta payload を型付けするため `MetaValue` enum を追加。 |
-| `src/contingency/errors.py` | `src/errors.rs` | Python の 4 クラスを Rust の 3 variant `ContingencyError` (`Config` / `State` / `Hardware`) に集約。`NotConnectedError` は `Hardware(..)` メッセージ variant に内包（Gap G7 参照）。 |
+| `src/contingency/errors.py` | `src/errors.rs` | Python の 4 クラスを Rust の 3 variant `ContingencyError` (`Config` / `State` / `Hardware`) に集約。`NotConnectedError` は `Hardware(..)` メッセージ variant に内包 (Gap G7 参照)。 |
 | `src/contingency/interfaces.py` | `src/schedule.rs` | `Schedule` `Protocol` → `trait Schedule`。Rust では `ArmableSchedule` super-trait を追加。 |
-| `src/contingency/builder.py` | `src/builder.rs` | `ScheduleBuilder` は Rust ネイティブのファサード（27 ファクトリメソッド）。 |
+| `src/contingency/builder.py` | `src/builder.rs` | `ScheduleBuilder` は Rust ネイティブのファサード (27 ファクトリメソッド)。 |
 | `src/contingency/bridge/__init__.py` | *(Rust 対応なし — DSL パースは Python 専用)* | |
 | `src/contingency/helpers/__init__.py` | `src/helpers/mod.rs` | |
-| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | 公開 API は同じ 3 つで、seed 付きの出力も同じ（`PyRandom` の shuffle・`fsum` による剰余補正・偶数丸め）。 |
-| *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`：Python の seed の与え方と標本化メソッドを持つ MT19937 の移植（§4 参照）。 |
+| `src/contingency/helpers/fleshler_hoffman.py` | `src/helpers/fleshler_hoffman.rs` | 公開 API は同じ 3 つで、seed 付きの出力も同じ (`PyRandom` の shuffle・`fsum` による剰余補正・偶数丸め)。 |
+| *(CPython `random.Random`)* | `src/helpers/py_random.rs` | `PyRandom`：Python の seed の与え方と標本化メソッドを持つ MT19937 の移植 (§4 参照)。 |
 | `src/contingency/schedules/__init__.py` | `src/schedules/mod.rs` | |
-| `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF`（ファクトリ）。 |
+| `src/contingency/schedules/ratio.py` | `src/schedules/ratio.rs` | `FR`, `VR`, `RR`, `CRF` (ファクトリ)。 |
 | `src/contingency/schedules/interval.py` | `src/schedules/interval.rs` | `FI`, `VI`, `RI`, `LimitedHold`。 |
 | `src/contingency/schedules/time_based.py` | `src/schedules/time_based.rs` | `FT`, `VT`, `RT`, `EXT`。 |
 | `src/contingency/schedules/differential.py` | `src/schedules/differential.rs` | `DRO`, `DRL`, `DRH`。Python の文字列リテラルを `DroMode` enum に置換。 |
@@ -62,14 +62,14 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 | `src/contingency/schedules/conjunctive.py` | `src/schedules/conjunctive.rs` | `Conjunctive` (Ferster & Skinner, 1957)。 |
 | `src/contingency/schedules/mixed.py` | `src/schedules/mixed.rs` | `Mixed` (Ferster & Skinner, 1957)。 |
 | `src/contingency/schedules/overlay.py` | `src/schedules/overlay.rs` | `Overlay` (Azrin & Holz, 1966)。 |
-| `src/contingency/schedules/interpolate.py` | `src/schedules/interpolate.rs` | `Interpolate`（セッション中プローブ）。 |
+| `src/contingency/schedules/interpolate.py` | `src/schedules/interpolate.rs` | `Interpolate` (セッション中プローブ)。 |
 | `src/contingency/schedules/aversive.py` | `src/schedules/aversive.rs` | `Sidman`, `DiscriminatedAvoidance`, `Escape`。 |
 | `src/contingency/schedules/trial_based.py` | `src/schedules/trial_based.rs` | `MatchingToSample`, `GoNoGo`。 |
 | `src/contingency/hw/__init__.py` | `src/hw/mod.rs` | |
 | `src/contingency/hw/protocols.py` | `src/hw/protocols.rs` | `Apparatus` トレイト + `ApparatusInfo` / `ApparatusStatus`。 |
-| `src/contingency/hw/virtual.py` | `src/hw/virtual_apparatus.rs` | `VirtualApparatus`（決定的なインメモリ backend）。 |
+| `src/contingency/hw/virtual.py` | `src/hw/virtual_apparatus.rs` | `VirtualApparatus` (決定的なインメモリ backend)。 |
 | `src/contingency/hw/serial_backend.py` | `src/hw/serial_backend.rs` | `SerialApparatus<L>`、`feature = "serial"` 配下。 |
-| `src/contingency/hw/hil_bridge.py` | `src/bin/hil.rs` (`contingency-hil` バイナリ) | Python 側はホスト（スケジュールを動かす）、Rust 側はアパレイタス（イベントに応答する）。相補的に HIL ループを完成させる。 |
+| `src/contingency/hw/hil_bridge.py` | `src/bin/hil.rs` (`contingency-hil` バイナリ) | Python 側はホスト (スケジュールを動かす)、Rust 側はアパレイタス (イベントに応答する)。相補的に HIL ループを完成させる。 |
 | *(Python 対応なし)* | `src/constants.rs` | `TIME_TOL = 1e-9` をモジュール定数として保持。 |
 | *(Python 対応なし)* | `src/helpers/checks.rs` | 各スケジュールの `step` 共通の monotonic-time / event-time ガード。 |
 | *(Python 対応なし)* | `src/python.rs` | PyO3 バインディング。 |
@@ -79,7 +79,7 @@ Rust 側に DSL bridge は存在しない。DSL ソースから Rust ランタ�
 
 すべての Python schedule モジュールに対応する Rust モジュールが存在。
 Rust 専用ファイルは binding glue または共通ユーティリティ。
-`bridge/`（DSL パース）は Rust 移植では意図的に存在しない。
+`bridge/` (DSL パース) は Rust 移植では意図的に存在しない。
 
 ## 2. 公開 API surface マッピング
 
@@ -104,7 +104,7 @@ Rust 専用ファイルは binding glue または共通ユーティリティ。
 | `VirtualApparatus` | `hw::VirtualApparatus` |
 | `SerialApparatus` (`__all__` 非掲載) | `hw::serial_backend::SerialApparatus` (`feature = "serial"`) |
 | `HilBridgeApparatus` | N/A — Rust はアパレイタス側を提供 (`bin/hil.rs`)；§6 参照 |
-| `from_dsl` | N/A — DSL パースは Python 専用（Gap G2 参照）。 |
+| `from_dsl` | N/A — DSL パースは Python 専用 (Gap G2 参照)。 |
 
 ### 2.2 `contingency.schedules`
 
@@ -120,14 +120,14 @@ Rust 専用ファイルは binding glue または共通ユーティリティ。
 | `Percentile` | `schedules::Percentile` (+ `PercentileDirection`, `PercentileTarget`) |
 | `Timeout`, `ResponseCost` | `schedules::{Timeout, ResponseCost}` |
 | `AdjustingSchedule`, `InterlockingSchedule`, `SecondOrder` | `schedules::{AdjustingSchedule, InterlockingSchedule, SecondOrder}` (+ `AdjustingTarget`) |
-| `ProgressiveRatio` + `arithmetic` / `geometric` / `richardson_roberts` | `schedules::ProgressiveRatio` + 3 つの自由関数（`Box<dyn StepFn>` を返す） |
+| `ProgressiveRatio` + `arithmetic` / `geometric` / `richardson_roberts` | `schedules::ProgressiveRatio` + 3 つの自由関数 (`Box<dyn StepFn>` を返す) |
 | `Sidman`, `DiscriminatedAvoidance`, `Escape` | `schedules::{Sidman, DiscriminatedAvoidance, Escape}` |
 | `MatchingToSample`, `GoNoGo` | `schedules::{MatchingToSample, GoNoGo}` |
-| `TrialType`（frozen dataclass。`comparisons: tuple[str, ...]`） | `schedules::TrialType`（`comparisons: Vec<String>`。`MatchingToSample::with_trial_types` で設定） |
+| `TrialType` (frozen dataclass。`comparisons: tuple[str, ...]`) | `schedules::TrialType` (`comparisons: Vec<String>`。`MatchingToSample::with_trial_types` で設定) |
 
 ### 2.3 DSL ブリッジ
 
-DSL のパースは Python 側（`contingency.bridge.from_dsl`）にのみ
+DSL のパースは Python 側 (`contingency.bridge.from_dsl`) にのみ
 存在する。Rust ランタイムには意図的に DSL パーサを置かない。
 Rust ランタイムを DSL ソースから駆動したい場合の推奨経路：
 
@@ -212,28 +212,28 @@ unit 構造体上の `pub fn` 群として実装され、シード/検証付き�
 スケジュール family の合計：**31**。Rust は **31 / 31** をすべて
 ファーストクラス型としてカバー。追加の Rust カバレッジ：
 `tests/properties.rs` (proptest 13 ケース)、
-`tests/conformance.rs`（全 fixture を strict、ignored なし）。
+`tests/conformance.rs` (全 fixture を strict、ignored なし)。
 
 ## 4. Conformance fixture マッピング
 
 23 個の JSON fixture はすべて `contingency-py/conformance/` 配下に
 ある。Rust 側のリプレイは `contingency-rs/tests/conformance.rs`。
 決定的な fixture は `reinforced` および `Reinforcer` の各フィールドに
-対して **bit 等価** で検証する（浮動小数点許容差は 1e-9）。
+対して **bit 等価** で検証する (浮動小数点許容差は 1e-9)。
 seed 付きの確率的 fixture も同じ方法で再生する。seed 付きスケジュールは
-すべて `PyRandom`（下記）から引くので、同じ整数 seed から Python と同じ
+すべて `PyRandom` (下記) から引くので、同じ整数 seed から Python と同じ
 乱数列が出る。
 
 `src/helpers/py_random.rs` は Python の PRNG を移植したもの。`PyRandom` は
-CPython の `Modules/_randommodule.c` の MT19937（整数 seed を 32 bit の
+CPython の `Modules/_randommodule.c` の MT19937 (整数 seed を 32 bit の
 word 列に分けて渡す `init_by_array`、`genrand_uint32`、53 bit の
-`random()`、`getrandbits`）に、`contingency-py` が呼ぶ `Lib/random.py` の
-メソッド（`_randbelow_with_getrandbits` 経由の `randrange`、
+`random()`、`getrandbits`) に、`contingency-py` が呼ぶ `Lib/random.py` の
+メソッド (`_randbelow_with_getrandbits` 経由の `randrange`、
 `-log(1 - random()) / lambd` の形の `expovariate`、後ろから入れ替える
-`shuffle`）を加えたもの。同じ非負整数の seed で `random.Random(seed)` と
+`shuffle`) を加えたもの。同じ非負整数の seed で `random.Random(seed)` と
 bit 単位で同じ列を返し、unit test は CPython が出した列で固定している。
 整数の draw はどのホストでも厳密に一致する。`expovariate` はプラット
-フォームの `log` を呼ぶため、libm の実装（例: macOS の arm64 と x86_64）に
+フォームの `log` を呼ぶため、libm の実装 (例: macOS の arm64 と x86_64) に
 よって最後の 1 bit が違いうる。Rust と Python が同じ libm で動くときに
 厳密に一致する。
 
@@ -266,7 +266,7 @@ bit 単位で同じ列を返し、unit test は CPython が出した列で固定
 この表の fixture も、コーパスの全 fixture も strict に再生する。
 `tests/conformance.rs` に ignored のテストはない。
 
-## 5. セマンティック不変条件チェックリスト（Gotchas 1-13 + Timeout meta）
+## 5. セマンティック不変条件チェックリスト (Gotchas 1-13 + Timeout meta)
 
 `contingency-py/docs/en/handoff-summary.md` の 17 不変条件に Wave 1 で
 追加された Timeout 不変条件 1 つを加えた計 18 件。
@@ -283,7 +283,7 @@ bit 単位で同じ列を返し、unit test は CPython が出した列で固定
 | G3 | `Concurrent` の gating 順序：COD チェックの前に changeover を登録。COD は tick 側強化を gate しない。 | `concurrent.rs`。 |
 | G3a | `Concurrent` の方向別 COD 上書き：`cod_directional[(from, to)]` がそのトランジションについてベース `cod` を置き換える。自己トランジションと負値は拒否。 | `concurrent.rs:187-201`。 |
 | G3b | `Concurrent` の成分形式 `punish`：オペランダムごとの punishment スケジュールを強化判定後に step。メイン成分とは COD 状態を共有しない。 | `concurrent.rs:172`。 |
-| G3c | `Concurrent` は COD 中に設定された強化子を、そのオペランダムでの COD 明け最初の反応まで保持する（Herrnstein, 1961）。FR/VR/RR/FI/VI/RI は成分内で保持し（Python: `deepcopy` で試す、Rust: `clone` に対する `Schedule::probe_response`）、それ以外の成分の強化子は複合側の待ち行列に積む。 | `concurrent.rs`, `schedule.rs`。 |
+| G3c | `Concurrent` は COD 中に設定された強化子を、そのオペランダムでの COD 明け最初の反応まで保持する (Herrnstein, 1961)。FR/VR/RR/FI/VI/RI は成分内で保持し (Python: `deepcopy` で試す、Rust: `clone` に対する `Schedule::probe_response`)、それ以外の成分の強化子は複合側の待ち行列に積む。 | `concurrent.rs`, `schedule.rs`。 |
 | G4 | `Chained` / `Tandem` は非アクティブ成分を step しない。 | `sequence.rs`。 |
 | G5 | `Alternative` は両成分に `(now, event)` を転送。win 時に両方 reset。 | `alternative.rs`。 |
 | G6 | `DRO` momentary は event を記録する**前**に境界判定。resetting は event step での強化を pre-empt。 | `differential.rs`。 |
@@ -296,8 +296,8 @@ bit 単位で同じ列を返し、unit test は CPython が出した列で固定
 | G13 | `Timeout.during_timeout` meta：blackout 中は `Outcome.meta["during_timeout"] = true` となり、wrap されたスケジュールへの応答はすべて抑制。 | `timeout.rs`。 |
 
 集計：移植済みの 31 family 全てについて 20/20 不変条件を実装。
-試行ベースおよび嫌悪系スケジュールは独自不変条件（フェーズ状態機械、
-shock 振幅の符号反転、Escape の連続 tick 発行）を持ち、
+試行ベースおよび嫌悪系スケジュールは独自不変条件 (フェーズ状態機械、
+shock 振幅の符号反転、Escape の連続 tick 発行) を持ち、
 `schedules::trial_based::tests` および `schedules::aversive::tests` で
 カバーされる。
 
@@ -309,11 +309,11 @@ shock 振幅の符号反転、Escape の連続 tick 発行）を持ち、
 | `ApparatusInfo`, `ApparatusStatus` | dataclass | struct |
 | `VirtualApparatus` | `hw/virtual.py` | `hw::VirtualApparatus` (`hw/virtual_apparatus.rs`) |
 | `SerialApparatus` | `hw/serial_backend.py` | `hw::serial_backend::SerialApparatus` (`feature = "serial"`) |
-| `HilBridgeApparatus`（ホスト側） | `hw/hil_bridge.py` | — |
-| HIL ブリッジ（アパレイタス側） | — | `src/bin/hil.rs` (`contingency-hil` バイナリ) |
+| `HilBridgeApparatus` (ホスト側) | `hw/hil_bridge.py` | — |
+| HIL ブリッジ (アパレイタス側) | — | `src/bin/hil.rs` (`contingency-hil` バイナリ) |
 
-HAL 同等性：Python は backend を 4 つ公開（virtual / serial / HIL host /
-プロトコル surface）。Rust は 3 つ（virtual / serial / HIL apparatus）。
+HAL 同等性：Python は backend を 4 つ公開 (virtual / serial / HIL host /
+プロトコル surface)。Rust は 3 つ (virtual / serial / HIL apparatus)。
 HIL のホスト/アパレイタス分離は**意図的**で、Python パッケージは
 スケジュールを動かしてアパレイタスを消費し、Rust 側はスケジュールを
 動かしつつアパレイタスとして振る舞う。両者で HIL ループを完成させる。
@@ -322,9 +322,9 @@ Rust 側 HAL テストカバレッジ：
 
 - `tests/hw_virtual_tests.rs` — 16 テスト
 - `tests/hw_serial_tests.rs` — 12 テスト
-- `tests/hil_integration.rs` — 7 テスト（`contingency-hil` バイナリを起動し、TCP/JSONL で駆動。`spec::SPEC_TYPES` の全種でセッションを開き、VI・VR・並立の強化を通信越しに確かめる）
+- `tests/hil_integration.rs` — 7 テスト (`contingency-hil` バイナリを起動し、TCP/JSONL で駆動。`spec::SPEC_TYPES` の全種でセッションを開き、VI・VR・並立の強化を通信越しに確かめる)
 
-Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）は
+Gap G3 (Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在) は
 `BY_DESIGN`。Rust で HIL ループのホスト役を担う場合は `Apparatus`
 トレイト + ワイヤプロトコル上のクライアントスタブで足り、Python の
 ヘルパクラスを複製する必要はない。
@@ -347,19 +347,19 @@ Gap G3（Python `HilBridgeApparatus` のホスト側ヘルパが Rust 不在）�
 |---|---|---|
 | G1 | `ScheduleBuilder` ファサード。**Closed** — `src/builder.rs` に Rust ネイティブの 27 ファクトリメソッドを実装し Python と対応。 | Resolved |
 | G2 | DSL ブリッジ。**By design** — DSL のパースは Python 専用のまま。Rust ランタイムは `ScheduleBuilder` で駆動し、DSL コンシューマは `contingency-py` 経由で利用する。 | `BY_DESIGN` |
-| G3 | HAL レイヤ。**Closed** — `Apparatus` トレイト + `VirtualApparatus` + `SerialApparatus` 完備。Python の `HilBridgeApparatus` ホスト側ヘルパは意図的に未提供（§6 参照）。 | Resolved |
-| G4 | 非 Python バインディング（UniFFI / WASM / cbindgen）。**Closed** — 3 つともライブシンボルと E2E テストあり（§7）。 | Resolved |
+| G3 | HAL レイヤ。**Closed** — `Apparatus` トレイト + `VirtualApparatus` + `SerialApparatus` 完備。Python の `HilBridgeApparatus` ホスト側ヘルパは意図的に未提供 (§6 参照)。 | Resolved |
+| G4 | 非 Python バインディング (UniFFI / WASM / cbindgen)。**Closed** — 3 つともライブシンボルと E2E テストあり (§7)。 | Resolved |
 | G5 | 確率的 conformance fixture。**解消** — `PyRandom` が CPython の `random.Random` を移植し、seed 付き fixture を strict に再生する。 | Resolved |
 | G7 | `NotConnectedError` を `Hardware(msg)` variant にフラット化。Python の specific subclass を catch していた呼び出し側はメッセージ文字列マッチが必要。 | `BY_DESIGN` |
-| G9 | **嫌悪系および試行ベース系を移植済み。** Rust の `src/schedules/aversive.rs`（`Sidman`, `DiscriminatedAvoidance`, `Escape`）と `src/schedules/trial_based.rs`（`MatchingToSample`, `GoNoGo`）が存在。 | Resolved |
-| G10 | `Multiple` および `Tandem` の conformance fixture（`multiple_fr_fr`, `tandem_fr_fr`）。**Closed** — 両方追加済み。 | Resolved |
-| G11 | Python ユニットテスト件数が Rust 件数を上回る（おおよそ 60%）。主因は `hypothesis` の property test（Rust は `proptest` で部分カバー）と一行で書かれたエラー入力の列挙。機能的乖離はない。 | Informational |
+| G9 | **嫌悪系および試行ベース系を移植済み。** Rust の `src/schedules/aversive.rs` (`Sidman`, `DiscriminatedAvoidance`, `Escape`) と `src/schedules/trial_based.rs` (`MatchingToSample`, `GoNoGo`) が存在。 | Resolved |
+| G10 | `Multiple` および `Tandem` の conformance fixture (`multiple_fr_fr`, `tandem_fr_fr`)。**Closed** — 両方追加済み。 | Resolved |
+| G11 | Python ユニットテスト件数が Rust 件数を上回る (おおよそ 60%)。主因は `hypothesis` の property test (Rust は `proptest` で部分カバー) と一行で書かれたエラー入力の列挙。機能的乖離はない。 | Informational |
 
 **BUG severity: 0 件。** §5 の不変条件はいずれも違反なし。31 family
 すべてに Rust ランタイム実装あり。
 
-判定：**PASS** — `BY_DESIGN` が 2 件残る（G2 DSL を Python 専用、
-G7 エラー variant のフラット化）。`ScheduleBuilder`
+判定：**PASS** — `BY_DESIGN` が 2 件残る (G2 DSL を Python 専用、
+G7 エラー variant のフラット化)。`ScheduleBuilder`
 駆動のワークフローについて機能的 gap はない。
 
 ## 9. 検証コマンド
@@ -375,9 +375,9 @@ cd apps/core/contingency-py
 .venv/bin/pytest -q
 ```
 
-2026-10-23 に `rustup run stable cargo test --all-features`（`python`・`uniffi`・`serial` をすべて有効）と、`contingency-py` での `.venv/bin/pytest -q` で数えた結果：
+2026-10-23 に `rustup run stable cargo test --all-features` (`python`・`uniffi`・`serial` をすべて有効) と、`contingency-py` での `.venv/bin/pytest -q` で数えた結果：
 
-- Rust：lib 512 + conformance (strict) 19 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + fleshler_hoffman_shape 11 + hil_integration 2 + hw_serial_tests 12 + hw_virtual_tests 16 + properties 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 3 = **テスト 613 件 green**。（その後、seed 付きの conformance fixture も strict に再生するようになり、ignored のテストはない。）
+- Rust：lib 512 + conformance (strict) 19 + e2e_c_ffi 1 + e2e_uniffi 1 + e2e_wasm 1 + ffi_smoke 7 + fleshler_hoffman_shape 11 + hil_integration 2 + hw_serial_tests 12 + hw_virtual_tests 16 + properties 13 + python_smoke 1 + uniffi_smoke 14 + doc-test 3 = **テスト 613 件 green**。(その後、seed 付きの conformance fixture も strict に再生するようになり、ignored のテストはない。)
 - Python：**1084 件 passed、8 件 skipped**。
 
 ## 参考文献

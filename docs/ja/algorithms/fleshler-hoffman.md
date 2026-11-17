@@ -15,11 +15,11 @@ https://doi.org/10.1901/jaba.1991.24-799
 
 ## 目的
 
-算術平均が目標値 `v` に等しい `n` 個の間隔（または比率）値のプール
+算術平均が目標値 `v` に等しい `n` 個の間隔 (または比率) 値のプール
 を生成する。シードが供給された場合、プールは決定論的にシャッフル
 される。VI, VR, VT によって内部利用される。
 
-## アルゴリズム（raw progression）
+## アルゴリズム (raw progression)
 
 `m ∈ 1..n` について:
 
@@ -70,7 +70,7 @@ https://doi.org/10.1901/jaba.1991.24-799
 ### `generate_intervals_hantula1991(v, n=12, seed=None) -> list[int]`
 
 Hantula (1991) の BASIC プログラム・バリアントを再現: リトライ
-ループ（Hantula の GOTO 130）を用いて、ゼロ初期化されたスロット
+ループ (Hantula の GOTO 130) を用いて、ゼロ初期化されたスロット
 へのランダム配置を行う。`generate_intervals` と同じ平均だが整数値
 で、Hantula 固有の配置戦略を持つ。使用頻度は低く、文献との整合性
 のために含まれている。
@@ -99,6 +99,6 @@ Hantula (1991) の BASIC プログラム・バリアントを再現: リトラ�
 1. float ドリフトを減らすため、単純合計の代わりに `math.fsum` を
    使用する。
 2. 主要生成器から Hantula 式のリトライループを削除する
-  （`random.shuffle` 経由で同じ分布を生成する）。
+  (`random.shuffle` 経由で同じ分布を生成する)。
 3. 文献を正確に再現するため `generate_intervals_hantula1991` を
    利用可能なまま残す。
