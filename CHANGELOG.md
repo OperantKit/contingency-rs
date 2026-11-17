@@ -16,6 +16,7 @@
 
 ### Changed
 
+- The `geometric` progressive-ratio step function rounds half to even (as Python `round`) instead of away from zero, so `geometric(1, 2.5)` requires 1, 2, 6, 16 (was 1, 3, 6, 16) and matches contingency-py.
 - `AdjustingSchedule` with `target = "ratio"` rounds the current value half to even (as Python `round`) for the response requirement and for the `start` check, instead of away from zero. A value that passes through `.5` (for example `start = 2.0, step = 0.5`) now gives the same requirements as contingency-py; `start = 0.5` is rejected.
 - Seeded schedules (VR, VI, VT, RR, RI, RT, MatchingToSample, GoNoGo) and the Fleshler-Hoffman generators now draw from `helpers::py_random::PyRandom`, a port of CPython's `random.Random`, instead of `rand::rngs::SmallRng`. A seeded sequence is now bit-equivalent to `contingency-py` with the same seed. **The sequence produced by an existing seed changes**; runs recorded with an earlier build cannot be replayed from the seed alone.
 - `generate_intervals` sums the progression with a correctly rounded `fsum` (as `math.fsum`), and `generate_ratios` / `generate_intervals_hantula1991` round half to even (as Python `round`), so the generators match the Python port value for value.

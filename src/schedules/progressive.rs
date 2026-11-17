@@ -118,7 +118,8 @@ struct Geometric {
 impl StepFn for Geometric {
     fn at(&self, n: usize) -> u32 {
         let value = (self.start as f64) * self.ratio.powi(n as i32);
-        let rounded = value.round();
+        // Halves round to even, as Python's round() does.
+        let rounded = value.round_ties_even();
         if !rounded.is_finite() || rounded >= u32::MAX as f64 {
             return u32::MAX;
         }
@@ -129,7 +130,8 @@ impl StepFn for Geometric {
     }
 }
 
-/// Geometric progression `r_n = round(start * ratio.powi(n))`.
+/// Geometric progression `r_n = round(start * ratio.powi(n))`, with
+/// halves rounded to even (`2.5 -> 2`, `3.5 -> 4`).
 ///
 /// # Errors
 ///
@@ -397,6 +399,19 @@ mod tests {
         // 4, 6, 9, 13.5 -> 14, 20.25 -> 20
         let values: Vec<u32> = (0..5).map(|n| fn_.at(n)).collect();
         assert_eq!(values, vec![4, 6, 9, 14, 20]);
+    }
+
+    #[test]
+    fn geometric_rounds_halves_to_even() {
+        // Same rule as Python's round(): 2.5 -> 2, 4.5 -> 4, 3.5 -> 4.
+        let fn_ = geometric(1, 2.5).unwrap();
+        let values: Vec<u32> = (0..4).map(|n| fn_.at(n)).collect();
+        assert_eq!(values, vec![1, 2, 6, 16]);
+        let fn_ = geometric(2, 1.5).unwrap();
+        let values: Vec<u32> = (0..5).map(|n| fn_.at(n)).collect();
+        assert_eq!(values, vec![2, 3, 4, 7, 10]);
+        let fn_ = geometric(7, 1.5).unwrap();
+        assert_eq!(fn_.at(1), 10); // 10.5 -> 10
     }
 
     #[test]
