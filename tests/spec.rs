@@ -361,6 +361,23 @@ fn percentile_rank_is_checked_against_zero_to_hundred() {
 }
 
 #[test]
+fn concurrent_components_keep_the_order_the_json_lists_them() {
+    // Parsed from text so the object's key order is the written one.
+    let spec: Value = serde_json::from_str(
+        r#"{"type": "Concurrent", "params": {"components": {
+            "right": {"type": "FT", "params": {"interval": 0.5}},
+            "center": {"type": "FT", "params": {"interval": 0.5}}}}}"#,
+    )
+    .unwrap();
+    let keys: Vec<&String> = spec["params"]["components"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .collect();
+    assert_eq!(keys, ["right", "center"]);
+}
+
+#[test]
 fn progressive_ratio_geometric_and_richardson_roberts() {
     // Geometric start 1, ratio 2: requirements 1, 2, 4.
     let mut s = build(json!({"type": "ProgressiveRatio", "params": {

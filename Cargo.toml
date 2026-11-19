@@ -50,9 +50,14 @@ serde-wasm-bindgen = "0.6"
 
 [features]
 default = ["std"]
+# `serde_json/preserve_order` keeps a JSON object's keys in the order they
+# are written, so `Concurrent` components keep the spec's order (it decides
+# which component wins a tie). The feature needs `std`; without `std` the
+# keys of an object are read in ascending order.
 std = [
     "serde/std",
     "serde_json/std",
+    "serde_json/preserve_order",
     "thiserror/std",
     "indexmap/std",
     "dep:getrandom",

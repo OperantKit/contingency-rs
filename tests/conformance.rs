@@ -262,6 +262,11 @@ fn compound_concurrent_punish() {
 }
 
 #[test]
+fn compound_concurrent_tick_tie_insertion_order() {
+    run_fixture("compound/concurrent_tick_tie_insertion_order.json");
+}
+
+#[test]
 fn compound_concurrent_punish_changeover() {
     run_fixture("compound/concurrent_punish_changeover.json");
 }

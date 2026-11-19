@@ -37,6 +37,10 @@
 //!   direction) or `punish_directional` (an array of
 //!   `{"from", "to", "schedule"}` objects); giving both is rejected.
 //!   They are passed to [`Concurrent::with_changeover_punishment`].
+//!   The components keep the order the JSON object lists them in (it
+//!   decides which component wins a tie on one tick). This needs the
+//!   `std` feature; a build without `std` reads an object's keys in
+//!   ascending order.
 //!
 //! Every malformed spec — unknown type, missing or mistyped parameter —
 //! returns [`ContingencyError::Config`]; parameter values that the
