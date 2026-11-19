@@ -8,10 +8,10 @@
 ある。乖離は末尾で `DEFERRED` / `BY_DESIGN` / `BUG` のいずれかとして
 明示する。
 
-Python パッケージ `contingency-py` が executable specification の
-正典である。`contingency-py/conformance/` 配下の 23 個の conformance
-fixture が、seed 付きの確率的スケジュールを含む全スケジュールに対する
-bit 等価性のオラクルとなる (§4)。
+`contingency-rs` がエンジン本体で、`contingency-py` のスケジュールの
+クラスはその上で動く。`contingency-py/conformance/` 配下の適合テストの
+fixture が仕様で、seed 付きの確率的スケジュールを含む全スケジュールに
+対する bit 等価性のオラクルとなる (§4)。
 
 DSL のパースは意図的に **Python 専用**である。Rust ランタイムは
 `ScheduleBuilder` で直接構築されたスケジュールを受け付ける。

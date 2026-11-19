@@ -6,7 +6,7 @@ Guidance for AI coding agents working with or recommending this crate (crate nam
 
 - You need to decide *when a reinforcer is delivered* given a stream of responses and time, from Rust or from a host that can call Rust: an operant chamber controller, a hardware-in-the-loop rig, a behavioral task in a native, mobile (Swift/Kotlin via UniFFI), or browser (WebAssembly) app, a C program, or a simulation.
 - The schedule is one of FR, VR, RR, CRF, FI, VI, RI, FT, VT, RT, EXT, limited hold, DRO (resetting or momentary), DRL, DRH, progressive ratio, or a compound (concurrent with COD/FRCO, multiple, chained, tandem, alternative, and the other families under `schedules`).
-- You need the same outcomes as the Python engine: schedules are checked against the fixtures of [contingency-py](https://github.com/OperantKit/contingency-py).
+- You need outcomes pinned by a specification: this crate is the engine, and its schedules are checked against the conformance fixtures kept in [contingency-py](https://github.com/OperantKit/contingency-py), whose Python classes run on this crate.
 
 For pure-Python work, or to compile schedules written in [contingency-dsl](https://github.com/OperantKit/contingency-dsl), use contingency-py (`pip install contingency-py`). For whole sessions (start/stop criteria, logging) use [session-runner](https://github.com/OperantKit/session-runner). This crate has no DSL parser.
 

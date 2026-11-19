@@ -2,18 +2,19 @@
 
 :jp: [日本語版](../ja/protocol.md)
 
-This document is the authoritative surface that `contingency-rs`
-implements. Every schedule in the family conforms to it; compound
-schedules compose over it.
+This document describes the schedule interface that `contingency-rs`
+implements and that `contingency-py` exposes in Python. Every schedule
+in the family conforms to it; compound schedules compose over it.
 
-## Source of truth
+## Where the behavior is specified
 
-`contingency-py` is the authoritative executable specification. The
-23 conformance fixtures under `contingency-py/conformance/` are the
-bit-equivalence oracle for deterministic schedules. The Rust crate
-re-implements the same contract and is held to the fixtures.
+`contingency-rs` is the engine. The conformance fixtures under
+`contingency-py/conformance/` are the specification: they pin the
+exact outcomes, and this crate is held to them. `contingency-py`'s
+schedule classes check their arguments in Python and run on this
+crate through the `contingency_core` module.
 
-Python definitions:
+Python definitions (the wrapper's public types):
 
 - `contingency-py/src/contingency/interfaces.py` — the `Schedule` Protocol.
 - `contingency-py/src/contingency/entities.py` — value objects.
@@ -42,7 +43,7 @@ should use `&mut self` at the trait level and keep RNG / counters in
 private fields. A dedicated `Box<dyn Schedule>` impl is provided to
 re-dispatch through the inner value.
 
-### Python (canonical)
+### Python (wrapper)
 
 ```python
 @runtime_checkable
@@ -245,7 +246,7 @@ pub type Result<T> = std::result::Result<T, ContingencyError>;
 The `Schedule` trait's `step()` returns `Result<Outcome>`; the Rust
 crate prefers `Err` over panics for all state violations.
 
-### Python (canonical)
+### Python (wrapper)
 
 ```
 ContingencyError (base)

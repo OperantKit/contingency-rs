@@ -2,18 +2,19 @@
 
 :gb: [English version](../en/protocol.md)
 
-本ドキュメントは `contingency-rs` が実装する権威的な表面仕様である。
-ファミリ内のすべてのスケジュールがこれに準拠し、複合スケジュールは
-この上に構成される。
+本ドキュメントは、`contingency-rs` が実装し、`contingency-py` が Python
+から見せるスケジュールのインタフェースを書く。ファミリ内のすべての
+スケジュールがこれに準拠し、複合スケジュールはこの上に構成される。
 
-## 真実の源泉
+## 振る舞いを定めるもの
 
-`contingency-py` が executable specification の正典である。
-`contingency-py/conformance/` 配下の 23 個の conformance fixture が
-決定的スケジュールに対する bit 等価性のオラクルである。Rust crate は
-同じ契約を再実装し、その fixture により検証される。
+`contingency-rs` がエンジン本体である。`contingency-py/conformance/`
+配下の適合テストの fixture が仕様で、結果を厳密に固定し、この crate は
+それに照らして検証される。`contingency-py` のスケジュールのクラスは
+引数を Python で検査し、`contingency_core` モジュールを通じてこの crate
+の上で動く。
 
-Python 側の定義：
+Python 側の定義 (包みの公開の型)：
 
 - `contingency-py/src/contingency/interfaces.py` — `Schedule` Protocol。
 - `contingency-py/src/contingency/entities.py` — 値オブジェクト。
@@ -41,7 +42,7 @@ pub trait Schedule {
 `&mut self` を使用し、RNG / カウンタを private フィールドに保持する。
 内部値へ再ディスパッチする専用の `Box<dyn Schedule>` 実装が提供される。
 
-### Python (正典)
+### Python (包み)
 
 ```python
 @runtime_checkable
@@ -248,7 +249,7 @@ pub type Result<T> = std::result::Result<T, ContingencyError>;
 `Schedule` トレイトの `step()` は `Result<Outcome>` を返す。Rust crate
 ではすべての状態違反で panic ではなく `Err` を優先する。
 
-### Python (正典)
+### Python (包み)
 
 ```
 ContingencyError (base)
@@ -278,7 +279,7 @@ ContingencyError (base)
 pub const TIME_TOL: f64 = 1e-9;
 ```
 
-Python (正典) では `interfaces` モジュール内で `_TIME_TOL = 1e-9` として
+Python の包みでは `interfaces` モジュール内で `_TIME_TOL = 1e-9` として
 定義される。
 
 両ポートで同一に適用される:

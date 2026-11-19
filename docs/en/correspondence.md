@@ -8,9 +8,9 @@ surface as the Python package, and where does each Python element
 live in Rust?" Discrepancies are surfaced explicitly as `DEFERRED`,
 `BY_DESIGN`, or `BUG` at the bottom.
 
-The Python package `contingency-py` is the authoritative executable
-specification. The 23 conformance fixtures under
-`contingency-py/conformance/` are the bit-equivalence oracle for every
+`contingency-rs` is the engine, and `contingency-py`'s schedule classes
+run on it. The conformance fixtures under `contingency-py/conformance/`
+are the specification and the bit-equivalence oracle for every
 schedule, seeded stochastic ones included (§4).
 
 DSL parsing is intentionally **Python-only**. The Rust runtime

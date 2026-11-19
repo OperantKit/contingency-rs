@@ -2,9 +2,9 @@
 
 :gb: [English README](README.md)
 
-contingency-rs は、OperantKit の強化スケジュールエンジンの Rust 版です。FR 5 や並立 VI VI のようなスケジュールと、起きた反応を順に渡すと、強化子をいつ提示するかを決めます。実験箱や課題を動かすプログラムが Python でないときに使います。たとえば Rust や C の制御プログラム、ブラウザの実験 (WebAssembly。[jsPsych](https://www.jspsych.org/) 用プラグインつき)、Swift や Kotlin のアプリ、ハードウェア・イン・ザ・ループ (HIL) の試験装置です。[OperantKit](https://github.com/OperantKit) の中では [contingency-py](https://github.com/OperantKit/contingency-py) の移植にあたり、実行可能な仕様は Python パッケージの `conformance/` にある適合性 fixture です。本クレートはそれらを再生して検証します。
+contingency-rs は、OperantKit の強化スケジュールエンジン本体で、Rust で書かれています。FR 5 や並立 VI VI のようなスケジュールと、起きた反応を順に渡すと、強化子をいつ提示するかを決めます。実験箱や課題を動かすプログラムが Python でないときに使います。たとえば Rust や C の制御プログラム、ブラウザの実験 (WebAssembly。[jsPsych](https://www.jspsych.org/) 用プラグインつき)、Swift や Kotlin のアプリ、ハードウェア・イン・ザ・ループ (HIL) の試験装置です。[OperantKit](https://github.com/OperantKit) の中ではエンジン本体にあたります。仕様は [contingency-py](https://github.com/OperantKit/contingency-py) の `conformance/` にある適合性 fixture で、本クレートはそれらを再生して検証します。contingency-py の Python のクラスは本クレートの上で動きます。
 
-- **contingency-py と同じ結果になります。** `tests/conformance.rs` は、乱数の種を持つ物を含むすべての fixture を再生します。CPython の `random.Random` を移植しているので、種付きの抽選も一致します。
+- **適合テストの fixture に照らして検査しています。** この crate がエンジン本体で、contingency-py に置いた fixture が仕様です。`tests/conformance.rs` は、乱数の種を持つ物を含むすべての fixture を再生します。CPython の `random.Random` を移植しているので、種付きの抽選も一致します。contingency-py のスケジュールのクラスは、この crate の上で動きます。
 - **変動スケジュールの値は Fleshler–Hoffman (1962) の数列で作ります。** 並立スケジュールでは切り替え遅延 (COD) を扱います。COD は、オペランダム (レバーやキー) を切り替えた直後に反応を強化しない時間のことです。
 - **1 つのエンジンを複数の環境から呼べます。** Rust・C・Python・WebAssembly・Swift/Kotlin が同じスケジュールのコードを使います。
 
