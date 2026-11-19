@@ -19,6 +19,11 @@
 #define TIME_TOL 1e-9
 
 /**
+ * Largest `n` and `length` a [`Lag`] accepts (`u32::MAX`).
+ */
+#define LAG_MAX (uintptr_t)UINT32_MAX
+
+/**
  * Opaque handle to an armable interval schedule (FI / VI / RI).
  *
  * Only used as an intermediary for constructing limited-hold
