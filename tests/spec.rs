@@ -337,6 +337,30 @@ fn percentile_direction_below_builds() {
 }
 
 #[test]
+fn percentile_rank_zero_below_reinforces_irts_at_or_under_the_window_minimum() {
+    let mut s = build(json!({"type": "Percentile", "params": {
+        "target": "irt", "rank": 0, "window": 2, "direction": "below"}}));
+    let steps: Vec<(f64, Option<&str>)> = [0.0, 1.0, 3.0, 3.5, 5.5, 5.9]
+        .iter()
+        .map(|t| (*t, Some("main")))
+        .collect();
+    // Window (1, 2): IRT 0.5 <= 1 yes; window (2, 0.5): IRT 2 <= 0.5 no;
+    // window (0.5, 2): IRT 0.4 <= 0.5 yes.
+    assert_eq!(reinforced_at(&run(s.as_mut(), &steps)), vec![3, 5]);
+}
+
+#[test]
+fn percentile_rank_is_checked_against_zero_to_hundred() {
+    for rank in [0, 100] {
+        build(json!({"type": "Percentile", "params": {
+            "target": "irt", "rank": rank, "window": 2}}));
+    }
+    let spec = json!({"type": "Percentile", "params": {
+        "target": "irt", "rank": 101, "window": 2}});
+    assert!(matches!(from_spec(&spec), Err(ContingencyError::Config(_))));
+}
+
+#[test]
 fn progressive_ratio_geometric_and_richardson_roberts() {
     // Geometric start 1, ratio 2: requirements 1, 2, 4.
     let mut s = build(json!({"type": "ProgressiveRatio", "params": {

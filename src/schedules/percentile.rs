@@ -75,7 +75,8 @@ impl Percentile {
     ///
     /// # Errors
     ///
-    /// - `rank` outside `[1, 100]` (0-th percentile is degenerate)
+    /// - `rank` outside `[0, 100]` (rank 0 is the smallest sample in the
+    ///   window, rank 100 the largest)
     /// - `window < 1`
     pub fn new(
         target: PercentileTarget,
@@ -83,9 +84,9 @@ impl Percentile {
         window: usize,
         direction: PercentileDirection,
     ) -> Result<Self> {
-        if !(1..=100).contains(&rank) {
+        if rank > 100 {
             return Err(ContingencyError::Config(format!(
-                "Percentile rank must be in [1, 100], got {rank}"
+                "Percentile rank must be in [0, 100], got {rank}"
             )));
         }
         if window < 1 {
@@ -240,11 +241,24 @@ mod tests {
     }
 
     #[test]
-    fn construct_rejects_rank_zero() {
-        assert!(matches!(
-            Percentile::new(PercentileTarget::Irt, 0, 5, PercentileDirection::Above),
-            Err(ContingencyError::Config(_))
-        ));
+    fn rank_zero_compares_with_the_smallest_irt_in_the_window() {
+        let mut s =
+            Percentile::new(PercentileTarget::Irt, 0, 2, PercentileDirection::Above).unwrap();
+        for t in [0.0, 1.0, 3.0] {
+            assert!(!respond(&mut s, t).reinforced);
+        }
+        // Window (1, 2): the 0th percentile is 1, so IRT 0.5 is below it.
+        assert!(!respond(&mut s, 3.5).reinforced);
+        // Window (2, 0.5): threshold 0.5, IRT 2 reinforces.
+        let o = respond(&mut s, 5.5);
+        assert!(o.reinforced);
+        assert_eq!(o.meta.get("percentile_rank"), Some(&MetaValue::Int(0)));
+        assert_eq!(
+            o.meta.get("percentile_threshold"),
+            Some(&MetaValue::Float(0.5))
+        );
+        // Window (0.5, 2): IRT 0.4 is below the minimum 0.5.
+        assert!(!respond(&mut s, 5.9).reinforced);
     }
 
     #[test]

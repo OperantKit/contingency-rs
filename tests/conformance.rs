@@ -362,6 +362,11 @@ fn differential_percentile_irt_r75_w3() {
 }
 
 #[test]
+fn differential_percentile_irt_r0_w2() {
+    run_fixture("differential/percentile_irt_r0_w2.json");
+}
+
+#[test]
 fn differential_lag_2_length_2() {
     run_fixture("differential/lag_2_length_2.json");
 }
