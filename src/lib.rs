@@ -28,6 +28,7 @@ pub mod helpers;
 pub mod hw;
 mod math;
 pub mod prelude;
+pub mod respondent;
 
 #[cfg(all(feature = "std", feature = "c-runtime"))]
 compile_error!("feature `c-runtime` is for `no_std` builds; build with --no-default-features");

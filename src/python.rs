@@ -35,6 +35,7 @@ use pyo3::wrap_pyfunction;
 use indexmap::IndexMap;
 
 use crate::{
+    respondent,
     schedule::ArmableSchedule,
     schedules::{self, DroMode, LimitedHold, ProgressiveRatio, StepFn},
     spec,
@@ -789,6 +790,66 @@ fn py_from_spec(spec: &Bound<'_, PyAny>) -> PyResult<PySchedule> {
 }
 
 // ---------------------------------------------------------------------------
+// Respondent Tier A expansion
+// ---------------------------------------------------------------------------
+
+// PyO3 0.22's `create_exception!` expansion tests a `gil-refs` cfg that
+// this crate does not declare; the lint is silenced for that expansion only.
+#[allow(unexpected_cfgs)]
+mod exceptions {
+    use pyo3::exceptions::PyValueError;
+
+    pyo3::create_exception!(
+        contingency_core,
+        UnresolvedError,
+        PyValueError,
+        "A value a respondent element needs is supplied neither by the \
+         expression nor by the options; ``missing`` names it."
+    );
+}
+use exceptions::UnresolvedError;
+
+/// Expand one Tier A respondent expression into its trial list.
+///
+/// ``spec`` is a contingency-dsl respondent AST node and ``options`` the
+/// values left to the program (``trials``, ``seed``, ``labels``), each
+/// given as a dict or a JSON string. Returns a list of trial dicts with
+/// the keys ``stage``, ``cs``, ``us``, ``context``, ``order``, ``time``
+/// and ``iti_s``.
+///
+/// Raises ``UnresolvedError`` (a ``ValueError``) with ``missing`` set
+/// when a needed value is absent, and ``ValueError`` when ``spec`` is not
+/// a Tier A node.
+#[pyfunction]
+#[pyo3(signature = (spec, options = None))]
+fn expand_respondent<'py>(
+    py: Python<'py>,
+    spec: &Bound<'py, PyAny>,
+    options: Option<&Bound<'py, PyAny>>,
+) -> PyResult<Bound<'py, PyAny>> {
+    let spec = spec_value_from_py(spec)?;
+    let options = match options {
+        Some(o) => spec_value_from_py(o)?,
+        None => serde_json::Value::Null,
+    };
+    let to_py = |e: respondent::ExpandError| match e {
+        respondent::ExpandError::Unresolved(missing) => {
+            let err = UnresolvedError::new_err(format!("unresolved: {missing}"));
+            match err.value_bound(py).setattr("missing", missing) {
+                Ok(()) => err,
+                Err(set_err) => set_err,
+            }
+        }
+        respondent::ExpandError::Invalid(msg) => PyValueError::new_err(msg),
+    };
+    let options = respondent::ExpandOptions::from_value(&options).map_err(to_py)?;
+    let trials = respondent::expand(&spec, &options).map_err(to_py)?;
+    let text = serde_json::to_string(&trials)
+        .map_err(|e| PyRuntimeError::new_err(format!("trial list not serialisable: {e}")))?;
+    py.import_bound("json")?.call_method1("loads", (text,))
+}
+
+// ---------------------------------------------------------------------------
 // Module entry
 // ---------------------------------------------------------------------------
 
@@ -805,6 +866,11 @@ fn contingency_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(pr_geometric, m)?)?;
     m.add_function(wrap_pyfunction!(pr_richardson_roberts, m)?)?;
     m.add_function(wrap_pyfunction!(py_from_spec, m)?)?;
+    m.add_function(wrap_pyfunction!(expand_respondent, m)?)?;
+    m.add(
+        "UnresolvedError",
+        m.py().get_type_bound::<UnresolvedError>(),
+    )?;
     m.add("SPEC_TYPES", PyTuple::new_bound(m.py(), spec::SPEC_TYPES))?;
     Ok(())
 }

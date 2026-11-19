@@ -35,7 +35,13 @@ def _fixtures() -> list[Path]:
     root = _corpus_dir()
     if not root.is_dir():
         return []
-    return sorted(p for p in root.rglob("*.json") if p.name != "index.json")
+    # `respondent/` holds respondent Tier A expansion cases, not schedule
+    # fixtures (see `test_respondent.py`).
+    return sorted(
+        p
+        for p in root.rglob("*.json")
+        if p.name != "index.json" and p.relative_to(root).parts[0] != "respondent"
+    )
 
 
 def _types(node: Any) -> set[str]:

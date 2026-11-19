@@ -84,7 +84,13 @@ struct ExpectSpec {
 // Path resolution
 // -----------------------------------------------------------------------------
 
+/// The corpus root: `CONTINGENCY_CONFORMANCE_DIR` when set (for example a
+/// checkout of another contingency-py branch), otherwise the sibling
+/// `../contingency-py/conformance/`.
 fn conformance_dir() -> PathBuf {
+    if let Some(dir) = std::env::var_os("CONTINGENCY_CONFORMANCE_DIR") {
+        return PathBuf::from(dir);
+    }
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     crate_root
         .join("..")
@@ -489,6 +495,12 @@ fn collect_fixtures(root: &Path, dir: &Path, out: &mut Vec<String>) {
             .unwrap_or_else(|e| panic!("dir entry error under {}: {e}", dir.display()))
             .path();
         if path.is_dir() {
+            // `respondent/` holds respondent Tier A expansion cases, not
+            // schedule fixtures; `tests/respondent_conformance.rs` replays
+            // them and checks that corpus for completeness.
+            if path.strip_prefix(root).ok() == Some(Path::new("respondent")) {
+                continue;
+            }
             collect_fixtures(root, &path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
             let rel = path
