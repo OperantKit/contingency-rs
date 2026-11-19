@@ -70,7 +70,8 @@ pub struct ExpandOptions {
     /// Trial count for elements without their own `trials` argument.
     pub trials: Option<u64>,
     /// Seed for `Contingency`, `TrulyRandom` and `ITI(uniform/exponential)`.
-    pub seed: Option<i64>,
+    /// Only its magnitude is used, and it must fit in 64 bits.
+    pub seed: Option<i128>,
     /// CS and US labels.
     pub labels: Labels,
 }
@@ -93,6 +94,8 @@ impl ExpandOptions {
             None | Some(Value::Null) => None,
             Some(v) => Some(
                 v.as_i64()
+                    .map(i128::from)
+                    .or_else(|| v.as_u64().map(i128::from))
                     .ok_or_else(|| invalid(format!("options.seed must be an integer, got {v}")))?,
             ),
         };
@@ -293,9 +296,11 @@ fn label(opt: &Option<String>, name: &str) -> Result<String> {
         .ok_or_else(|| ExpandError::Unresolved(name.to_string()))
 }
 
-fn draws(seed: Option<i64>, n: usize) -> Result<Vec<f64>> {
+fn draws(seed: Option<i128>, n: usize) -> Result<Vec<f64>> {
     let seed = seed.ok_or_else(|| ExpandError::Unresolved("seed".to_string()))?;
-    let mut rng = PyRandom::from_seed(seed.unsigned_abs());
+    let seed = u64::try_from(seed.unsigned_abs())
+        .map_err(|_| invalid(format!("seed {seed} does not fit in 64 bits")))?;
+    let mut rng = PyRandom::from_seed(seed);
     Ok((0..n).map(|_| rng.random()).collect())
 }
 
@@ -307,11 +312,11 @@ fn periods(
     p_cs: f64,
     p_no_cs: f64,
     n: usize,
-    seed: Option<i64>,
+    seed: Option<i128>,
 ) -> Result<Vec<Trial>> {
-    let u = draws(seed, 2 * n)?;
+    let u = draws(seed, double(n)?)?;
     let pick = |x: f64, p: f64| (x < p).then(|| us.to_string());
-    let mut out = Vec::with_capacity(2 * n);
+    let mut out = Vec::with_capacity(u.len());
     for k in 0..n {
         out.push(trial(
             vec![cs.to_string()],
@@ -327,7 +332,7 @@ fn periods(
     Ok(out)
 }
 
-fn iti_values(m: &Map<String, Value>, n: usize, seed: Option<i64>) -> Result<Vec<f64>> {
+fn iti_values(m: &Map<String, Value>, n: usize, seed: Option<i128>) -> Result<Vec<f64>> {
     let mean = req_seconds(m, "ITI", "mean")?;
     match m.get("distribution").and_then(Value::as_str) {
         Some("fixed") => Ok(vec![mean; n]),
@@ -341,6 +346,12 @@ fn iti_values(m: &Map<String, Value>, n: usize, seed: Option<i64>) -> Result<Vec
             .collect()),
         _ => Err(invalid("ITI distribution not understood".to_string())),
     }
+}
+
+/// `2 * n` for elements that alternate two kinds of trial.
+fn double(n: usize) -> Result<usize> {
+    n.checked_mul(2)
+        .ok_or_else(|| invalid(format!("{n} trials give too many periods")))
 }
 
 fn repeat(n: usize, t: Trial) -> Vec<Trial> {
@@ -479,7 +490,7 @@ pub fn expand(spec: &Value, options: &ExpandOptions) -> Result<Vec<Trial>> {
                 gap,
                 ..TrialTime::default()
             };
-            let mut out = Vec::with_capacity(2 * n);
+            let mut out = Vec::with_capacity(double(n)?);
             for _ in 0..n {
                 out.push(trial(vec![cs.clone()], None, at_cs(0.0)));
                 out.push(trial(Vec::new(), Some(us.clone()), us_time.clone()));
@@ -494,7 +505,7 @@ pub fn expand(spec: &Value, options: &ExpandOptions) -> Result<Vec<Trial>> {
             };
             let plus = req_str(m, ty, "cs_positive")?;
             let minus = req_str(m, ty, "cs_negative")?;
-            let mut out = Vec::with_capacity(2 * n);
+            let mut out = Vec::with_capacity(double(n)?);
             for _ in 0..n {
                 out.push(trial(vec![plus.clone()], Some(us.clone()), at_cs(0.0)));
                 out.push(trial(vec![minus.clone()], None, at_cs(0.0)));
@@ -511,5 +522,58 @@ pub fn expand(spec: &Value, options: &ExpandOptions) -> Result<Vec<Trial>> {
         other => Err(invalid(format!(
             "not a Tier A respondent expression: {other:?}"
         ))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn us_pattern(trials: &[Trial]) -> Vec<Option<&str>> {
+        trials.iter().map(|t| t.us.as_deref()).collect()
+    }
+
+    /// Seeds are integers of any size the JSON reader holds; above
+    /// `i64::MAX` the stream is still CPython's `random.Random(seed)`.
+    /// Expected: `expand` of the reference reading with seed 2**64 - 1.
+    #[test]
+    fn seed_above_i64_matches_cpython() {
+        let options =
+            ExpandOptions::from_value(&serde_json::json!({"trials": 4, "seed": u64::MAX})).unwrap();
+        let spec = serde_json::json!({"type": "TrulyRandom", "cs": "a", "us": "b", "p": 0.5});
+        let trials = expand(&spec, &options).unwrap();
+        let b = Some("b");
+        assert_eq!(us_pattern(&trials), [b, b, b, None, None, b, None, None]);
+    }
+
+    /// `i64::MIN` is seeded by its magnitude 2**63.
+    #[test]
+    fn most_negative_seed_uses_its_magnitude() {
+        let options =
+            ExpandOptions::from_value(&serde_json::json!({"trials": 2, "seed": i64::MIN})).unwrap();
+        let spec = serde_json::json!({"type": "ITI", "distribution": "uniform",
+                                      "mean": {"value": 0.5, "unit": "s"}});
+        let iti: Vec<f64> = expand(&spec, &options)
+            .unwrap()
+            .iter()
+            .map(|t| t.iti_s.unwrap())
+            .collect();
+        // random.Random(-(2**63)).random() for the first two draws.
+        assert_eq!(iti, [0.5534639983914199, 0.9406144709090462]);
+    }
+
+    /// A trial count whose period count overflows is an error, not a panic.
+    #[test]
+    fn period_count_overflow_is_invalid() {
+        let options = ExpandOptions {
+            trials: Some(u64::MAX),
+            seed: Some(1),
+            ..ExpandOptions::default()
+        };
+        let spec = serde_json::json!({"type": "TrulyRandom", "cs": "a", "us": "b", "p": 0.5});
+        assert!(matches!(
+            expand(&spec, &options),
+            Err(ExpandError::Invalid(_))
+        ));
     }
 }
