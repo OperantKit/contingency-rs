@@ -35,12 +35,13 @@ def _fixtures() -> list[Path]:
     root = _corpus_dir()
     if not root.is_dir():
         return []
-    # `respondent/` holds respondent Tier A expansion cases, not schedule
-    # fixtures (see `test_respondent.py`).
+    # `respondent/` holds respondent Tier A expansion cases (see
+    # `test_respondent.py`) and `dsl/` DSL programs with their specs; neither
+    # is a schedule fixture.
     return sorted(
         p
         for p in root.rglob("*.json")
-        if p.name != "index.json" and p.relative_to(root).parts[0] != "respondent"
+        if p.name != "index.json" and p.relative_to(root).parts[0] not in ("respondent", "dsl")
     )
 
 

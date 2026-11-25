@@ -497,9 +497,13 @@ fn collect_fixtures(root: &Path, dir: &Path, out: &mut Vec<String>) {
         if path.is_dir() {
             // `respondent/` holds respondent Tier A expansion cases, not
             // schedule fixtures; `tests/respondent_conformance.rs` replays
-            // them and checks that corpus for completeness.
-            if path.strip_prefix(root).ok() == Some(Path::new("respondent")) {
-                continue;
+            // them and checks that corpus for completeness. `dsl/` holds
+            // DSL programs with the spec each one means; this crate does
+            // not read DSL text.
+            if let Ok(rel) = path.strip_prefix(root) {
+                if rel == Path::new("respondent") || rel == Path::new("dsl") {
+                    continue;
+                }
             }
             collect_fixtures(root, &path, out);
         } else if path.extension().and_then(|e| e.to_str()) == Some("json") {
